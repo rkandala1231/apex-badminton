@@ -1,0 +1,84 @@
+# Apex Collegiate Badminton — React + TypeScript
+
+The Apex tournament site, rebuilt as a React + TypeScript single-page app (Vite). Same live Supabase backend as the previous plain-HTML version (registration, admin dashboard, live analytics) — this rebuild focuses on mobile responsiveness and UI polish (motion, toasts, loading states, optimistic admin updates).
+
+## Stack
+
+- Vite + React 19 + TypeScript
+- Tailwind CSS v4 (theme tokens in `src/index.css`)
+- `@supabase/supabase-js` — data, auth, RPC calls
+- `@tanstack/react-query` — data fetching/caching/optimistic updates
+- `react-router-dom` — `/` and `/admin` routes (admin code-split, lazy-loaded)
+- `react-hook-form` + `zod` — registration form validation
+- `framer-motion` — section reveals, chart entrances, mobile nav drawer
+- `sonner` — toast notifications
+
+## Local development
+
+```bash
+npm install
+cp .env.example .env   # already has the live project's URL + publishable key
+npm run dev
+```
+
+## Environment variables
+
+| Variable | Value |
+|---|---|
+| `VITE_SUPABASE_URL` | `https://xxfbocoktyfbiukxsyer.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | the publishable/anon key from `.env.example` |
+
+These are safe to expose client-side (that's what the anon/publishable key is for) — every table it touches is protected by Postgres row-level security, and public writes go through the `register_for_apex` RPC. No secret keys are used here.
+
+## Deploying to Vercel (connected to your GitHub repo)
+
+1. **Push this project to your `apex-badminton` GitHub repo.** You can replace the repo's contents entirely — the old `index.html` (GitHub Pages version) is no longer needed once Vercel is serving the site. From this project folder:
+   ```bash
+   git init
+   git remote add origin https://github.com/rkandala1231/apex-badminton.git
+   git add .
+   git commit -m "Rebuild as React + TypeScript"
+   git branch -M main
+   git push -u origin main --force
+   ```
+   (`--force` only if you want this to fully replace the old GitHub Pages HTML — otherwise push to a new branch and merge.)
+
+2. **Import the repo in Vercel**: [vercel.com/new](https://vercel.com/new) → select the `apex-badminton` repo. Vercel auto-detects Vite, no build config needed (`npm run build`, output `dist/`).
+
+3. **Add the environment variables** in the Vercel project's Settings → Environment Variables, before the first deploy (or redeploy after adding them):
+   - `VITE_SUPABASE_URL` = `https://xxfbocoktyfbiukxsyer.supabase.co`
+   - `VITE_SUPABASE_ANON_KEY` = (the key from `.env.example`)
+
+4. **Deploy.** Vercel gives you a `*.vercel.app` URL immediately; you can attach a custom domain afterward in Settings → Domains.
+
+5. **Turn off GitHub Pages** (optional cleanup) in the repo's Settings → Pages, once you've confirmed the Vercel URL works — otherwise the two will coexist without conflict.
+
+`vercel.json` in this project already handles SPA routing (so refreshing `/admin` doesn't 404), and the app auto-redirects the old `#admin` hash link to `/admin`.
+
+## Project structure
+
+```
+src/
+  components/
+    sections/     Hero, Mission, Registration, Tournament, Formats, Analytics
+    charts/       TrendChart, BarChart, Bracket (all SVG, framer-motion entrances)
+    admin/        AdminAuthForm, AdminDashboard
+    ui/           Button, SectionHead, Reveal
+    Nav.tsx, Footer.tsx
+  pages/
+    Home.tsx       the public site (all sections)
+    Admin.tsx       auth-gated staff dashboard (lazy-loaded)
+  lib/
+    supabase.ts    Supabase client
+    queries.ts     react-query hooks (analytics, registration RPC, admin CRUD)
+    useAuth.ts      auth state + is_admin check
+    types.ts        shared types + event/region metadata
+```
+
+## Database contract (unchanged from the previous version)
+
+- `register_for_apex(p_college_name, p_captain_name, p_captain_email, p_region, p_roster_size, p_notes, p_event_codes)` — RPC, public write
+- `is_admin()` — RPC, checks the caller against the `admins` allowlist
+- `admin_registrations_view` — authenticated-admin-only read
+- `public_summary_stats`, `public_event_counts`, `public_region_counts`, `public_weekly_trend` — public read-only analytics views
+- `registrations.status` updates — authenticated-admin-only, via the admin dashboard
