@@ -52,11 +52,11 @@ const STEPS = [
 ];
 
 const TIMELINE = [
-  { date: 'SEP 15, 2026', label: 'Registration opens', done: true },
-  { date: 'NOV 1, 2026', label: 'Early-bird deadline (10% off)', done: true },
-  { date: 'DEC 15, 2026', label: 'Final registration deadline', done: false },
-  { date: 'JAN 12, 2027', label: 'Pools announced & seeding released', done: false },
-  { date: 'FEB 20–22, 2027', label: 'Apex tournament weekend', done: false },
+  { date: 'SEP 15, 2026', label: 'Registration opens', done: false },
+  { date: 'OCT 1, 2026', label: 'Early-bird deadline (10% off)', done: false },
+  { date: 'OCT 24, 2026', label: 'Final registration deadline', done: false },
+  { date: 'NOV 3, 2026', label: 'Pools announced & seeding released', done: false },
+  { date: 'NOV 7, 2026', label: 'Apex tournament day', done: false },
 ];
 
 const FEES = [

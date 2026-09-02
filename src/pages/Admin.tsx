@@ -1,12 +1,38 @@
-import { Link } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { useAuth, useIsAdmin } from '../lib/useAuth';
+import { staffIdFromEmail } from '../lib/staffAuth';
+import { useAuth, useIsAdmin, useIsSuperAdmin } from '../lib/useAuth';
 import { AdminAuthForm } from '../components/admin/AdminAuthForm';
 import { AdminDashboard } from '../components/admin/AdminDashboard';
+import { AdminPlayersSection } from '../components/admin/AdminPlayersSection';
+import { AdminScheduleSection } from '../components/admin/AdminScheduleSection';
+import { AdminDrawsSection } from '../components/admin/AdminDrawsSection';
+import { AdminLiveMatchesSection } from '../components/admin/AdminLiveMatchesSection';
+import { AdminManageStaffSection } from '../components/admin/AdminManageStaffSection';
+import { AdminAccountSection } from '../components/admin/AdminAccountSection';
+import { LiveScoringSection } from '../components/matchcenter/LiveScoringSection';
+
+const TOURNEY_SECTIONS = [
+  { to: 'registrations', label: 'Registrations' },
+  { to: 'players', label: 'Players' },
+  { to: 'schedule', label: 'Schedule' },
+  { to: 'draws', label: 'Draws' },
+  { to: 'live-matches', label: 'Live Matches' },
+  { to: 'scoring', label: 'Live Scoring' },
+  { to: 'account', label: 'Account' },
+];
+const SUPER_ADMIN_SECTION = { to: 'staff', label: 'Manage Admins' };
 
 export function Admin() {
   const { user, loading } = useAuth();
   const isAdmin = useIsAdmin(user);
+  const isSuperAdmin = useIsSuperAdmin(user);
+  const sections = isSuperAdmin ? [...TOURNEY_SECTIONS, SUPER_ADMIN_SECTION] : TOURNEY_SECTIONS;
+
+  useEffect(() => {
+    document.title = 'Tournament Staff — Apex Collegiate Badminton';
+  }, []);
 
   return (
     <div className="min-h-screen bg-bg">
@@ -16,8 +42,25 @@ export function Admin() {
             A
           </span>
           <span className="font-display text-lg tracking-wide">APEX</span>
+          <span className="hidden sm:inline-block mono text-[0.68rem] uppercase tracking-wider text-text-muted border border-border-soft rounded-full px-2.5 py-1 ml-1">
+            Tournament Staff
+          </span>
         </Link>
-        {user && <span className="mono text-[0.78rem] text-text-muted">{user.email}</span>}
+        <div className="flex items-center gap-3.5">
+          {user?.email && isAdmin === true && (
+            <span className="mono text-[0.78rem] text-text-muted hidden sm:inline">
+              {staffIdFromEmail(user.email)}
+            </span>
+          )}
+          {isAdmin === true && (
+            <button
+              onClick={() => supabase.auth.signOut()}
+              className="inline-flex items-center justify-center gap-2 rounded-full font-bold text-[0.78rem] px-4 py-2 bg-transparent text-text-primary border border-border hover:border-accent hover:text-accent transition-colors"
+            >
+              Sign out
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="max-w-[1180px] mx-auto px-5 md:px-12 py-8 md:py-14">
@@ -42,7 +85,46 @@ export function Admin() {
             </button>
           </div>
         ) : (
-          <AdminDashboard email={user.email || ''} onSignOut={() => supabase.auth.signOut()} />
+          <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8 items-start">
+            <nav
+              className="flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible border-b md:border-b-0 md:border-r border-border-soft pb-3 md:pb-0 md:pr-5"
+              aria-label="Tournament staff sections"
+            >
+              {sections.map((s) => (
+                <NavLink
+                  key={s.to}
+                  to={`/admin/${s.to}`}
+                  className={({ isActive }) =>
+                    `whitespace-nowrap px-3.5 py-2.5 rounded-lg text-[0.85rem] font-semibold transition-colors no-underline ${
+                      isActive
+                        ? 'bg-accent-soft text-accent'
+                        : 'text-text-secondary hover:text-text-primary hover:bg-surface-1'
+                    }`
+                  }
+                >
+                  {s.label}
+                </NavLink>
+              ))}
+            </nav>
+
+            <div className="min-w-0">
+              <Routes>
+                <Route index element={<Navigate to="/admin/registrations" replace />} />
+                <Route path="registrations" element={<AdminDashboard />} />
+                <Route path="players" element={<AdminPlayersSection />} />
+                <Route path="schedule" element={<AdminScheduleSection />} />
+                <Route path="draws" element={<AdminDrawsSection />} />
+                <Route path="live-matches" element={<AdminLiveMatchesSection />} />
+                <Route path="scoring" element={<LiveScoringSection />} />
+                <Route path="account" element={<AdminAccountSection />} />
+                <Route
+                  path="staff"
+                  element={isSuperAdmin ? <AdminManageStaffSection /> : <Navigate to="/admin/registrations" replace />}
+                />
+                <Route path="*" element={<Navigate to="/admin/registrations" replace />} />
+              </Routes>
+            </div>
+          </div>
         )}
       </div>
     </div>

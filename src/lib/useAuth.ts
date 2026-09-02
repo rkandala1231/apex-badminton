@@ -41,3 +41,27 @@ export function useIsAdmin(user: User | null) {
 
   return isAdmin;
 }
+
+/** Super admins get everything, including managing who else is staff.
+ *  Regular admins get full tournament-management access but not this. */
+export function useIsSuperAdmin(user: User | null) {
+  const [isSuperAdmin, setIsSuperAdmin] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setIsSuperAdmin(null);
+      return;
+    }
+    let cancelled = false;
+    setIsSuperAdmin(null);
+    supabase.rpc('is_super_admin').then(({ data, error }) => {
+      if (cancelled) return;
+      setIsSuperAdmin(!error && !!data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  return isSuperAdmin;
+}
