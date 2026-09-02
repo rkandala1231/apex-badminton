@@ -9,6 +9,61 @@ import type {
   WeeklyTrendRow,
 } from './types';
 
+export interface TeamStandingRow {
+  college: string;
+  matches_played: number;
+  matches_won: number;
+  matches_lost: number;
+  games_won: number;
+  games_lost: number;
+  points_won: number;
+  points_lost: number;
+  point_diff: number;
+}
+
+export function useTeamStandings(eventCode: string | null, stage: string | null) {
+  return useQuery({
+    queryKey: ['team-standings', eventCode, stage],
+    queryFn: async (): Promise<TeamStandingRow[]> => {
+      const { data, error } = await supabase.rpc('get_team_standings', {
+        p_event_code: eventCode,
+        p_stage: stage,
+      });
+      if (error) throw error;
+      return (data as TeamStandingRow[]) || [];
+    },
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export interface HeadToHeadRow {
+  college_a: string;
+  college_b: string;
+  matches_played: number;
+  college_a_wins: number;
+  college_b_wins: number;
+  college_a_points: number;
+  college_b_points: number;
+}
+
+export function useHeadToHead(collegeA: string | null, collegeB: string | null, eventCode: string | null) {
+  return useQuery({
+    queryKey: ['head-to-head', collegeA, collegeB, eventCode],
+    queryFn: async (): Promise<HeadToHeadRow | null> => {
+      const { data, error } = await supabase.rpc('get_head_to_head', {
+        p_college_a: collegeA,
+        p_college_b: collegeB,
+        p_event_code: eventCode,
+      });
+      if (error) throw error;
+      return (data as HeadToHeadRow[])?.[0] ?? null;
+    },
+    enabled: !!collegeA && !!collegeB && collegeA !== collegeB,
+    staleTime: 15_000,
+  });
+}
+
 export interface AnalyticsData {
   stats: SummaryStats;
   events: EventCountRow[];

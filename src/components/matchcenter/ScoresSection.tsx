@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { LIVE_MATCHES, COMPLETED_MATCHES } from '../../lib/matchCenterData';
+import { EventStatistics } from './EventStatistics';
 import { SubTabs, EmptyState } from './shared';
 
 type Tab = 'live' | 'completed' | 'stats';
@@ -39,9 +40,7 @@ export function ScoresSection() {
           <div className="mt-5">{/* completed matches table renders here */}</div>
         ))}
 
-      {tab === 'stats' && (
-        <EmptyState className="mt-5" text="Event statistics will appear once matches are underway." />
-      )}
+      {tab === 'stats' && <EventStatistics />}
     </div>
   );
 }

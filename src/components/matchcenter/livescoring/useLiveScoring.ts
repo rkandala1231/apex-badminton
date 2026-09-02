@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '../../../lib/useAuth';
+import { saveMatchResult } from '../../../lib/matchStats';
 import { HARD_CAP, INTERVAL_AT, POINTS_TO_WIN, STORAGE_KEY, WIN_BY } from './constants';
 import type { GameState, MatchState, Side, StartSetup } from './types';
 
@@ -51,6 +53,7 @@ function gamesWonCount(games: GameState[], side: Side) {
 }
 
 export function useLiveScoring() {
+  const { user } = useAuth();
   const [state, setState] = useState<MatchState>(() => loadState() ?? freshState());
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | null>(null);
@@ -74,6 +77,17 @@ export function useLiveScoring() {
 
   const gamesNeeded = state.format === 'bo3' ? 2 : 1;
   const currentGame = state.started ? state.games[state.games.length - 1] : null;
+
+  // Fire-and-forget save to Supabase. Never blocks local scoring -- this runs court-side and
+  // must keep working through a flaky connection; a failure just surfaces as a toast so staff
+  // know the result didn't make it to the server this time.
+  function persistResult(finalState: MatchState, winnerSide: Side | null, status: 'completed' | 'abandoned') {
+    saveMatchResult({ state: finalState, winnerSide, status, scoredBy: user?.id ?? null }).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to save match result', err);
+      showToast(status === 'completed' ? "Saved locally — couldn't sync result to server" : "Couldn't sync abandoned match to server");
+    });
+  }
 
   function startMatch(setup: StartSetup) {
     setState({
@@ -121,8 +135,10 @@ export function useLiveScoring() {
       if (wins >= gamesNeeded) matchWinner = winnerSide;
     }
 
-    setState({ ...state, games, server: side, log, matchWinner });
+    const nextState = { ...state, games, server: side, log, matchWinner };
+    setState(nextState);
     if (intervalMsg) showToast(intervalMsg);
+    if (matchWinner) persistResult(nextState, matchWinner, 'completed');
   }
 
   function undo() {
@@ -153,6 +169,11 @@ export function useLiveScoring() {
 
   function endMatch() {
     if (!window.confirm('End this match now? Current progress will be cleared.')) return;
+    // Only worth recording if at least one point was actually scored -- an empty stub match
+    // (started, then immediately ended) has nothing to say about anyone's performance.
+    if (state.started && state.log.length > 0 && !state.matchWinner) {
+      persistResult(state, null, 'abandoned');
+    }
     newMatch();
   }
 
