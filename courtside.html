@@ -1,0 +1,676 @@
+<title>Courtside</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Anton&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg: #131110;
+    --surface-1: #1c1815;
+    --surface-2: #211c18;
+    --surface-3: #272119;
+    --border: #362f27;
+    --border-soft: #241f1a;
+    --text-primary: #f7f3ec;
+    --text-secondary: #c9c0b4;
+    --text-muted: #948b7f;
+    --accent: #10b981;
+    --accent-dim: #0f766e;
+    --accent-hover: #34d399;
+    --accent-soft: rgba(16, 185, 129, 0.14);
+    --gold: #ffb627;
+    --gold-soft: rgba(255, 182, 39, 0.14);
+    --side-a: #3987e5;
+    --side-a-soft: rgba(57, 135, 229, 0.14);
+    --side-b: #d95926;
+    --side-b-soft: rgba(217, 89, 38, 0.14);
+  }
+
+  * { box-sizing: border-box; }
+  html { color-scheme: dark; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: 'Manrope', -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  h1, h2, h3 {
+    font-family: 'Anton', 'Archivo Black', sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    text-wrap: balance;
+    margin: 0;
+  }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  button { font-family: inherit; cursor: pointer; }
+  button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  [hidden] { display: none !important; }
+
+  .wrap { max-width: 640px; margin: 0 auto; padding: 20px 16px 64px; }
+
+  /* ---- Header ---- */
+  header { display: flex; align-items: center; gap: 12px; padding: 8px 0 22px; }
+  .mark {
+    width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--accent), var(--gold));
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Anton', sans-serif; color: #171310; font-size: 1.05rem;
+  }
+  .head-text .eyebrow {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--accent); font-weight: 600;
+  }
+  .head-text h1 { font-size: 1.5rem; margin-top: 2px; }
+
+  .lede { color: var(--text-secondary); font-size: 0.92rem; line-height: 1.6; margin: 0 0 22px; max-width: 52ch; }
+
+  /* ---- Cards ---- */
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border-soft);
+    border-radius: 16px; padding: 20px; margin-bottom: 16px;
+  }
+  .card-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--text-muted); font-weight: 600; margin-bottom: 12px;
+  }
+
+  /* ---- Segmented control ---- */
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .seg button {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 10px; color: var(--text-secondary); font-weight: 700; font-size: 0.86rem;
+    text-align: left; transition: border-color 0.15s, background 0.15s, color 0.15s;
+  }
+  .seg button .sub { display: block; font-weight: 500; font-size: 0.74rem; color: var(--text-muted); margin-top: 2px; }
+  .seg button[aria-pressed="true"] {
+    background: var(--accent-soft); border-color: var(--accent); color: var(--text-primary);
+  }
+  .seg button[aria-pressed="true"] .sub { color: var(--accent-hover); }
+
+  .field { margin-bottom: 16px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label {
+    display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted);
+    margin-bottom: 7px; text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .name-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .name-row input {
+    width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 11px 12px; color: var(--text-primary); font-size: 0.94rem; font-weight: 700;
+  }
+  .name-row input::placeholder { color: var(--text-muted); font-weight: 500; }
+  .dot-a { color: var(--side-a); } .dot-b { color: var(--side-b); }
+  .name-row label { display: flex; align-items: center; gap: 6px; }
+  .name-row label::before { content: '●'; font-size: 0.6rem; }
+  .name-row label.a::before { color: var(--side-a); }
+  .name-row label.b::before { color: var(--side-b); }
+
+  select#event-type {
+    width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 11px 12px; color: var(--text-primary); font-size: 0.9rem; font-weight: 600;
+    appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23948b7f' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center;
+  }
+
+  .server-pick { display: flex; gap: 10px; }
+  .server-pick button {
+    flex: 1; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px; color: var(--text-secondary); font-weight: 700; font-size: 0.86rem;
+  }
+  .server-pick button[aria-pressed="true"].a { background: var(--side-a-soft); border-color: var(--side-a); color: var(--text-primary); }
+  .server-pick button[aria-pressed="true"].b { background: var(--side-b-soft); border-color: var(--side-b); color: var(--text-primary); }
+
+  .btn-primary {
+    width: 100%; background: var(--accent); color: #08211a; border: none; border-radius: 12px;
+    padding: 15px; font-weight: 800; font-size: 0.98rem; text-transform: uppercase; letter-spacing: 0.03em;
+    transition: background 0.15s;
+  }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-primary:disabled { background: var(--surface-3); color: var(--text-muted); cursor: not-allowed; }
+
+  .btn-ghost {
+    background: transparent; border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; color: var(--text-secondary); font-weight: 700; font-size: 0.82rem;
+  }
+  .btn-ghost:hover { border-color: var(--text-muted); color: var(--text-primary); }
+
+  /* ---- Rules disclosure ---- */
+  details.rules summary {
+    cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between;
+    font-weight: 700; font-size: 0.88rem; color: var(--text-primary);
+  }
+  details.rules summary::-webkit-details-marker { display: none; }
+  details.rules summary::after {
+    content: '+'; font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; color: var(--accent);
+    transition: transform 0.15s;
+  }
+  details.rules[open] summary::after { content: '\2212'; }
+  .rules-body { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .rule-row { display: flex; gap: 10px; font-size: 0.86rem; color: var(--text-secondary); line-height: 1.55; }
+  .rule-row .k { flex-shrink: 0; width: 92px; color: var(--accent-hover); font-weight: 700; font-family: 'JetBrains Mono', monospace; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; padding-top: 2px; }
+
+  /* ---- Live scoreboard ---- */
+  .meta-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .pill {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.04em;
+    padding: 5px 10px; border-radius: 100px; background: var(--surface-2); border: 1px solid var(--border);
+    color: var(--text-secondary); text-transform: uppercase;
+  }
+  .pill.event { color: var(--gold); border-color: rgba(255,182,39,0.35); background: var(--gold-soft); }
+
+  .scoreboard { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .side {
+    background: var(--surface-1); border: 1.5px solid var(--border); border-radius: 18px;
+    padding: 18px 14px 20px; display: flex; flex-direction: column; align-items: center; gap: 10px;
+    -webkit-tap-highlight-color: transparent; user-select: none; transition: border-color 0.15s, transform 0.06s;
+    position: relative; overflow: hidden;
+  }
+  .side::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  }
+  .side.a::before { background: var(--side-a); }
+  .side.b::before { background: var(--side-b); }
+  .side:active { transform: scale(0.98); }
+  .side.serving { border-color: var(--accent); }
+  .side-name { display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 0.98rem; text-align: center; }
+  .serve-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0;
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .score-num { font-family: 'Anton', sans-serif; font-size: clamp(3.2rem, 15vw, 4.6rem); line-height: 0.9; color: var(--text-primary); }
+  .game-pips { display: flex; gap: 5px; }
+  .pip { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--border); }
+  .pip.won.a { background: var(--side-a); border-color: var(--side-a); }
+  .pip.won.b { background: var(--side-b); border-color: var(--side-b); }
+  .tap-hint { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+  .controls { display: flex; gap: 10px; margin-top: 14px; }
+  .controls .btn-ghost { flex: 1; text-align: center; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+    background: var(--surface-3); border: 1px solid var(--border); color: var(--text-primary);
+    padding: 11px 18px; border-radius: 100px; font-size: 0.84rem; font-weight: 600;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 20; display: flex; align-items: center; gap: 8px;
+    opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); }
+
+  /* ---- Overlays ---- */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(10, 8, 7, 0.82); backdrop-filter: blur(3px);
+    display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 30;
+  }
+  .overlay-card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 20px;
+    padding: 28px 26px; max-width: 380px; width: 100%; text-align: center;
+  }
+  .overlay-card .eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; letter-spacing: 0.14em; color: var(--gold); text-transform: uppercase; font-weight: 700; }
+  .overlay-card h2 { font-size: 1.7rem; margin: 8px 0 4px; }
+  .overlay-card .score-line { color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; margin-bottom: 18px; }
+  .overlay-card .games-list { display: flex; flex-direction: column; gap: 6px; margin: 14px 0 20px; }
+  .overlay-card .games-list div { font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; color: var(--text-secondary); display: flex; justify-content: space-between; padding: 6px 10px; background: var(--surface-2); border-radius: 8px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .side, .toast, details.rules summary::after { transition: none; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="mark">A</div>
+    <div class="head-text">
+      <div class="eyebrow">Apex Badminton Club</div>
+      <h1>Courtside</h1>
+    </div>
+  </header>
+
+  <p class="lede">Live match scoring for tournament day &mdash; BWF match structure, scaled to a 15&#8209;point game. Pick a stage below; pool play defaults to a single game, knockout to best&#8209;of&#8209;three.</p>
+
+  <!-- ============ SETUP ============ -->
+  <div id="setup">
+
+    <div class="card">
+      <div class="card-label">Stage</div>
+      <div class="seg" id="stage-seg">
+        <button type="button" data-stage="roundrobin" aria-pressed="true">Round Robin<span class="sub">Pool play</span></button>
+        <button type="button" data-stage="knockout" aria-pressed="false">Knockout<span class="sub">Semifinal &middot; Final</span></button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Match format</div>
+      <div class="seg" id="format-seg">
+        <button type="button" data-format="single" aria-pressed="true">Single Game<span class="sub">Race to 15</span></button>
+        <button type="button" data-format="bo3" aria-pressed="false">Best of 3<span class="sub">First to 2 games</span></button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Match details</div>
+      <div class="field">
+        <div class="name-row">
+          <div>
+            <label class="a" for="name-a">Side A</label>
+            <input id="name-a" type="text" placeholder="e.g. Meridian State" maxlength="28" />
+          </div>
+          <div>
+            <label class="b" for="name-b">Side B</label>
+            <input id="name-b" type="text" placeholder="e.g. Rutgers–Camden" maxlength="28" />
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="event-type">Event</label>
+        <select id="event-type">
+          <option value="MS">Men's Singles</option>
+          <option value="WS">Women's Singles</option>
+          <option value="MD">Men's Doubles</option>
+          <option value="WD">Women's Doubles</option>
+          <option value="XD">Mixed Doubles</option>
+          <option value="TEAM">College Team</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>First server</label>
+        <div class="server-pick" id="server-pick">
+          <button type="button" class="a" data-server="A" aria-pressed="true">Side A</button>
+          <button type="button" class="b" data-server="B" aria-pressed="false">Side B</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <details class="rules">
+        <summary>How the scoring works</summary>
+        <div class="rules-body">
+          <div class="rule-row"><span class="k">Points</span><span>Rally-point scoring &mdash; every rally wins a point, regardless of who served.</span></div>
+          <div class="rule-row"><span class="k">Game win</span><span>First to 15 points with a 2&#8209;point lead. Tied at 14&#8209;14, play continues until one side leads by 2 &mdash; or reaches 16, which wins outright.</span></div>
+          <div class="rule-row"><span class="k">Interval</span><span>A break is called when either side first reaches 8 points in a game.</span></div>
+          <div class="rule-row"><span class="k">Match win</span><span>Single Game: one game decides it. Best of 3: first side to win 2 games takes the match.</span></div>
+          <div class="rule-row"><span class="k">Serve</span><span>Whoever wins the rally serves next. The winner of a completed game serves first in the next one.</span></div>
+        </div>
+      </details>
+    </div>
+
+    <button type="button" class="btn-primary" id="start-btn">Start Match</button>
+  </div>
+
+  <!-- ============ LIVE SCOREBOARD ============ -->
+  <div id="live" hidden>
+
+    <div class="meta-bar">
+      <span class="pill" id="pill-stage">Round Robin</span>
+      <span class="pill" id="pill-format">Single Game</span>
+      <span class="pill event" id="pill-event">MS</span>
+      <span class="pill" id="pill-game">Game 1</span>
+    </div>
+
+    <div class="scoreboard">
+      <button type="button" class="side a" id="side-a" aria-label="Point for Side A">
+        <div class="side-name"><span class="serve-dot" id="dot-a" hidden></span><span id="live-name-a">Side A</span></div>
+        <div class="score-num mono" id="score-a">0</div>
+        <div class="game-pips" id="pips-a"></div>
+        <div class="tap-hint">Tap to score</div>
+      </button>
+      <button type="button" class="side b" id="side-b" aria-label="Point for Side B">
+        <div class="side-name"><span class="serve-dot" id="dot-b" hidden></span><span id="live-name-b">Side B</span></div>
+        <div class="score-num mono" id="score-b">0</div>
+        <div class="game-pips" id="pips-b"></div>
+        <div class="tap-hint">Tap to score</div>
+      </button>
+    </div>
+
+    <div class="controls">
+      <button type="button" class="btn-ghost" id="undo-btn">&#8630; Undo last point</button>
+      <button type="button" class="btn-ghost" id="end-btn">End match</button>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <details class="rules">
+        <summary>How the scoring works</summary>
+        <div class="rules-body">
+          <div class="rule-row"><span class="k">Points</span><span>Rally-point scoring &mdash; every rally wins a point, regardless of who served.</span></div>
+          <div class="rule-row"><span class="k">Game win</span><span>First to 15 points with a 2&#8209;point lead. Tied at 14&#8209;14, play continues until one side leads by 2 &mdash; or reaches 16, which wins outright.</span></div>
+          <div class="rule-row"><span class="k">Interval</span><span>A break is called when either side first reaches 8 points in a game.</span></div>
+          <div class="rule-row"><span class="k">Match win</span><span id="rules-match-win">Single Game: one game decides it.</span></div>
+          <div class="rule-row"><span class="k">Serve</span><span>Whoever wins the rally serves next. The winner of a completed game serves first in the next one.</span></div>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"><span class="dot"></span><span id="toast-text"></span></div>
+
+  <!-- ============ GAME COMPLETE ============ -->
+  <div class="overlay" id="game-overlay" hidden>
+    <div class="overlay-card">
+      <div class="eyebrow">Game Complete</div>
+      <h2 id="game-winner-name">&mdash;</h2>
+      <div class="score-line" id="game-final-score">15&ndash;11</div>
+      <button type="button" class="btn-primary" id="next-game-btn">Start Next Game</button>
+    </div>
+  </div>
+
+  <!-- ============ MATCH COMPLETE ============ -->
+  <div class="overlay" id="match-overlay" hidden>
+    <div class="overlay-card">
+      <div class="eyebrow">Match Winner</div>
+      <h2 id="match-winner-name">&mdash;</h2>
+      <div class="games-list" id="match-games-list"></div>
+      <button type="button" class="btn-primary" id="new-match-btn">New Match</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var POINTS_TO_WIN = 15;
+  var WIN_BY = 2;
+  var HARD_CAP = 16;
+  var INTERVAL_AT = 8;
+
+  var STORAGE_KEY = 'courtside-match-v1';
+
+  var state = null;
+
+  function freshState() {
+    return {
+      stage: 'roundrobin',
+      format: 'single',
+      eventType: 'MS',
+      nameA: '',
+      nameB: '',
+      firstServer: 'A',
+      started: false,
+      games: [],       // {a, b, winner, intervalShown}
+      server: 'A',
+      matchWinner: null,
+      log: []           // {gameIndex, side, prevServer}
+    };
+  }
+
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return null;
+  }
+
+  state = load() || freshState();
+
+  // ---- DOM refs ----
+  var $ = function (id) { return document.getElementById(id); };
+  var setupEl = $('setup'), liveEl = $('live');
+  var stageSeg = $('stage-seg'), formatSeg = $('format-seg');
+  var nameAInput = $('name-a'), nameBInput = $('name-b'), eventSelect = $('event-type');
+  var serverPick = $('server-pick');
+  var startBtn = $('start-btn');
+  var sideA = $('side-a'), sideB = $('side-b');
+  var scoreAEl = $('score-a'), scoreBEl = $('score-b');
+  var dotA = $('dot-a'), dotB = $('dot-b');
+  var pipsA = $('pips-a'), pipsB = $('pips-b');
+  var liveNameA = $('live-name-a'), liveNameB = $('live-name-b');
+  var pillStage = $('pill-stage'), pillFormat = $('pill-format'), pillEvent = $('pill-event'), pillGame = $('pill-game');
+  var undoBtn = $('undo-btn'), endBtn = $('end-btn');
+  var toast = $('toast'), toastText = $('toast-text');
+  var gameOverlay = $('game-overlay'), gameWinnerName = $('game-winner-name'), gameFinalScore = $('game-final-score'), nextGameBtn = $('next-game-btn');
+  var matchOverlay = $('match-overlay'), matchWinnerName = $('match-winner-name'), matchGamesList = $('match-games-list'), newMatchBtn = $('new-match-btn');
+  var rulesMatchWin = $('rules-match-win');
+
+  var EVENT_LABEL = { MS: "Men's Singles", WS: "Women's Singles", MD: "Men's Doubles", WD: "Women's Doubles", XD: 'Mixed Doubles', TEAM: 'College Team' };
+  var toastTimer = null;
+
+  function showToast(msg) {
+    toastText.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 2600);
+  }
+
+  function gamesNeeded() { return state.format === 'bo3' ? 2 : 1; }
+
+  function checkGameWinner(a, b) {
+    if (a >= HARD_CAP || b >= HARD_CAP) return a > b ? 'A' : 'B';
+    if ((a >= POINTS_TO_WIN || b >= POINTS_TO_WIN) && Math.abs(a - b) >= WIN_BY) return a > b ? 'A' : 'B';
+    return null;
+  }
+
+  function gamesWonCount(side) {
+    var n = 0;
+    for (var i = 0; i < state.games.length; i++) if (state.games[i].winner === side) n++;
+    return n;
+  }
+
+  // ---- Setup screen wiring ----
+  function wireSeg(seg, attr, onPick) {
+    seg.addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-' + attr + ']');
+      if (!btn) return;
+      var val = btn.getAttribute('data-' + attr);
+      onPick(val);
+      Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) {
+        b.setAttribute('aria-pressed', String(b === btn));
+      });
+    });
+  }
+
+  wireSeg(stageSeg, 'stage', function (val) {
+    state.stage = val;
+    // Sensible default: round robin -> single game, knockout -> best of 3 (still user-overridable)
+    var newFormat = val === 'knockout' ? 'bo3' : 'single';
+    state.format = newFormat;
+    Array.prototype.forEach.call(formatSeg.querySelectorAll('button'), function (b) {
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-format') === newFormat));
+    });
+  });
+
+  wireSeg(formatSeg, 'format', function (val) { state.format = val; });
+
+  serverPick.addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-server]');
+    if (!btn) return;
+    state.firstServer = btn.getAttribute('data-server');
+    Array.prototype.forEach.call(serverPick.querySelectorAll('button'), function (b) {
+      b.setAttribute('aria-pressed', String(b === btn));
+    });
+  });
+
+  startBtn.addEventListener('click', function () {
+    state.nameA = (nameAInput.value || 'Side A').trim();
+    state.nameB = (nameBInput.value || 'Side B').trim();
+    state.eventType = eventSelect.value;
+    state.started = true;
+    state.games = [{ a: 0, b: 0, winner: null, intervalShown: false }];
+    state.server = state.firstServer;
+    state.matchWinner = null;
+    state.log = [];
+    save();
+    render();
+  });
+
+  // ---- Live scoring ----
+  function currentGame() { return state.games[state.games.length - 1]; }
+
+  function scorePoint(side) {
+    if (state.matchWinner) return;
+    var g = currentGame();
+    if (g.winner) return;
+    state.log.push({ gameIndex: state.games.length - 1, side: side, prevServer: state.server });
+    if (side === 'A') g.a++; else g.b++;
+    state.server = side;
+
+    var leader = Math.max(g.a, g.b);
+    if (!g.intervalShown && leader === INTERVAL_AT) {
+      g.intervalShown = true;
+      showToast('Interval — ' + INTERVAL_AT + ' points');
+    }
+
+    var winner = checkGameWinner(g.a, g.b);
+    if (winner) {
+      g.winner = winner;
+      save();
+      render();
+      openGameOverlay(winner, g);
+      return;
+    }
+    save();
+    render();
+  }
+
+  function undo() {
+    if (state.log.length === 0) return;
+    var entry = state.log.pop();
+    var g = state.games[entry.gameIndex];
+    if (entry.side === 'A') g.a = Math.max(0, g.a - 1); else g.b = Math.max(0, g.b - 1);
+    g.winner = null;
+    state.server = entry.prevServer;
+    state.matchWinner = null;
+    gameOverlay.hidden = true;
+    matchOverlay.hidden = true;
+    save();
+    render();
+  }
+
+  function openGameOverlay(winnerSide, g) {
+    var name = winnerSide === 'A' ? state.nameA : state.nameB;
+    gameWinnerName.textContent = name;
+    gameFinalScore.textContent = g.a + '–' + g.b;
+
+    var wins = { A: gamesWonCount('A'), B: gamesWonCount('B') };
+    if (wins[winnerSide] >= gamesNeeded()) {
+      state.matchWinner = winnerSide;
+      save();
+      gameOverlay.hidden = true;
+      openMatchOverlay(winnerSide);
+    } else {
+      gameOverlay.hidden = false;
+    }
+  }
+
+  nextGameBtn.addEventListener('click', function () {
+    gameOverlay.hidden = true;
+    var prevWinner = currentGame().winner;
+    state.games.push({ a: 0, b: 0, winner: null, intervalShown: false });
+    state.server = prevWinner; // winner of previous game serves first
+    save();
+    render();
+    showToast('Change ends — Game ' + state.games.length);
+  });
+
+  function openMatchOverlay(winnerSide) {
+    var name = winnerSide === 'A' ? state.nameA : state.nameB;
+    matchWinnerName.textContent = name;
+    matchGamesList.innerHTML = '';
+    state.games.forEach(function (g, i) {
+      var row = document.createElement('div');
+      var label = document.createElement('span');
+      label.textContent = 'Game ' + (i + 1);
+      var score = document.createElement('span');
+      score.textContent = g.a + '–' + g.b;
+      row.appendChild(label);
+      row.appendChild(score);
+      matchGamesList.appendChild(row);
+    });
+    matchOverlay.hidden = false;
+  }
+
+  newMatchBtn.addEventListener('click', function () {
+    matchOverlay.hidden = true;
+    var keep = { stage: state.stage, format: state.format, eventType: state.eventType };
+    state = freshState();
+    state.stage = keep.stage;
+    state.format = keep.format;
+    state.eventType = keep.eventType;
+    save();
+    liveEl.hidden = true;
+    setupEl.hidden = false;
+    render();
+  });
+
+  endBtn.addEventListener('click', function () {
+    if (!confirm('End this match now? Current progress will be cleared.')) return;
+    newMatchBtn.click();
+  });
+
+  sideA.addEventListener('click', function () { scorePoint('A'); });
+  sideB.addEventListener('click', function () { scorePoint('B'); });
+  undoBtn.addEventListener('click', undo);
+
+  document.addEventListener('keydown', function (e) {
+    if (!state.started || liveEl.hidden) return;
+    if (e.key === 'a' || e.key === 'A') scorePoint('A');
+    if (e.key === 'b' || e.key === 'B') scorePoint('B');
+    if (e.key === 'z' || e.key === 'Z') undo();
+  });
+
+  // ---- Render ----
+  function renderPips(el, side) {
+    el.innerHTML = '';
+    var total = gamesNeeded() === 1 ? 1 : 3;
+    var won = gamesWonCount(side);
+    for (var i = 0; i < total; i++) {
+      var p = document.createElement('span');
+      p.className = 'pip' + (i < won ? ' won ' + side.toLowerCase() : '');
+      el.appendChild(p);
+    }
+  }
+
+  function render() {
+    if (!state.started) {
+      setupEl.hidden = false;
+      liveEl.hidden = true;
+      return;
+    }
+    setupEl.hidden = true;
+    liveEl.hidden = false;
+
+    liveNameA.textContent = state.nameA;
+    liveNameB.textContent = state.nameB;
+
+    var g = currentGame();
+    scoreAEl.textContent = g.a;
+    scoreBEl.textContent = g.b;
+
+    dotA.hidden = state.server !== 'A';
+    dotB.hidden = state.server !== 'B';
+    sideA.classList.toggle('serving', state.server === 'A');
+    sideB.classList.toggle('serving', state.server === 'B');
+
+    pillStage.textContent = state.stage === 'knockout' ? 'Knockout' : 'Round Robin';
+    pillFormat.textContent = state.format === 'bo3' ? 'Best of 3' : 'Single Game';
+    pillEvent.textContent = state.eventType;
+    pillGame.textContent = gamesNeeded() === 1 ? 'Race to 15' : ('Game ' + state.games.length + ' of 3');
+    rulesMatchWin.textContent = state.format === 'bo3'
+      ? 'Best of 3: first side to win 2 games takes the match.'
+      : 'Single Game: one game decides it.';
+
+    renderPips(pipsA, 'A');
+    renderPips(pipsB, 'B');
+
+    if (gamesNeeded() === 1) { pipsA.style.display = 'none'; pipsB.style.display = 'none'; }
+    else { pipsA.style.display = 'flex'; pipsB.style.display = 'flex'; }
+  }
+
+  // Restore mid-match state on reload
+  if (state.started) {
+    nameAInput.value = state.nameA;
+    nameBInput.value = state.nameB;
+    eventSelect.value = state.eventType;
+  }
+  render();
+})();
+</script>

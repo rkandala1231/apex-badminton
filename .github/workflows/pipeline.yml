@@ -1,0 +1,148 @@
+name: Ship pipeline (security -> evals -> deploy)
+
+# 3 "agents", each a distinct job with its own role:
+#   security  — dependency + secret scanning, blocks anything unsafe
+#   evals     — typecheck, lint, build, and a Playwright smoke test across every route
+#   deploy    — only runs if both of the above pass; deploys to the environment matching the branch
+#
+# Branch -> environment mapping:
+#   dev  branch  -> apex-badminton-dev  Vercel project  (Dev Supabase project)
+#   qa   branch  -> apex-badminton-qa   Vercel project  (QA Supabase project)
+#   main branch  -> apexclubj           Vercel project  (Prod Supabase project)
+#
+# On a pull request into dev/qa/main: security + evals run as required checks, nothing deploys.
+# On a push to dev/qa/main: security + evals run, then deploy runs automatically if both pass.
+#
+# See CI_CD.md for the one-time setup (GitHub secrets, branch protection).
+
+on:
+  push:
+    branches: [dev, qa, main]
+  pull_request:
+    branches: [dev, qa, main]
+  workflow_dispatch: {}
+
+jobs:
+  security:
+    name: security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Dependency vulnerability scan
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Guard against committed real env files
+        run: |
+          if git ls-files | grep -E '^\.env(\.(development|production|qa))?$'; then
+            echo "::error::A real .env file is tracked in git. Only .env.example / .env.qa.example should ever be committed — real keys belong in Vercel's env vars, not the repo."
+            exit 1
+          fi
+          echo "No real .env files are tracked. Good."
+
+      - name: Guard against service-role / secret keys in source
+        run: |
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git -E 'service_role|SUPABASE_SERVICE_ROLE|sb_secret_' . ; then
+            echo "::error::Found a service-role/secret-key pattern in the repo. Only the anon/publishable key should ever appear client-side."
+            exit 1
+          fi
+          echo "No service-role/secret-key patterns found."
+
+  evals:
+    name: evals
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc -b
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build (no secrets needed — placeholder Supabase env)
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: placeholder-anon-key
+
+      - name: Install Playwright's Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke test every route (guardrail)
+        run: npm run smoke
+
+  deploy:
+    name: deploy
+    needs: [security, evals]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Resolve target Vercel project for this branch
+        id: target
+        run: |
+          case "${{ github.ref_name }}" in
+            main) echo "project_id=${{ secrets.VERCEL_PROJECT_ID_PROD }}" >> "$GITHUB_OUTPUT"; echo "env_name=production" >> "$GITHUB_OUTPUT" ;;
+            qa)   echo "project_id=${{ secrets.VERCEL_PROJECT_ID_QA }}"   >> "$GITHUB_OUTPUT"; echo "env_name=qa" >> "$GITHUB_OUTPUT" ;;
+            dev)  echo "project_id=${{ secrets.VERCEL_PROJECT_ID_DEV }}"  >> "$GITHUB_OUTPUT"; echo "env_name=development" >> "$GITHUB_OUTPUT" ;;
+            *)    echo "::error::No Vercel project mapped for branch ${{ github.ref_name }}"; exit 1 ;;
+          esac
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel environment info (env vars come from the Vercel project, not GitHub secrets)
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ steps.target.outputs.project_id }}
+
+      - name: Build via Vercel
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ steps.target.outputs.project_id }}
+
+      - name: Deploy prebuilt output
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed ${{ steps.target.outputs.env_name }} to: $url"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ steps.target.outputs.project_id }}
+
+      - name: Summary
+        run: |
+          echo "### Deployed \`${{ github.ref_name }}\` -> ${{ steps.target.outputs.env_name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.deploy.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"

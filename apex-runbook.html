@@ -1,0 +1,435 @@
+<title>Apex Deploy Runbook</title>
+<style>
+  :root {
+    --paper: #faf7f0;
+    --paper-raised: #ffffff;
+    --ink: #16231d;
+    --ink-soft: #47564d;
+    --ink-faint: #7c8a80;
+    --line: #ddd6c5;
+    --line-soft: #e9e3d4;
+    --emerald: #0d8f5f;
+    --emerald-ink: #ffffff;
+    --emerald-soft: #e2f3ea;
+    --amber: #b6791a;
+    --amber-soft: #faf0dd;
+    --slate: #5b6b78;
+    --slate-soft: #e9edf1;
+    --code-bg: #1c261f;
+    --code-ink: #d9ecdf;
+    --code-accent: #7fd8ac;
+    --shadow: 0 1px 2px rgba(22,35,29,0.06), 0 8px 24px -12px rgba(22,35,29,0.18);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #121814;
+      --paper-raised: #1a221c;
+      --ink: #eef2ec;
+      --ink-soft: #b7c3ba;
+      --ink-faint: #7d8b81;
+      --line: #2c352d;
+      --line-soft: #232b25;
+      --emerald: #34d399;
+      --emerald-ink: #0b1510;
+      --emerald-soft: #16291f;
+      --amber: #e0a83f;
+      --amber-soft: #2b2110;
+      --slate: #9fb2c2;
+      --slate-soft: #1b2530;
+      --code-bg: #0d1310;
+      --code-ink: #cfe9d9;
+      --code-accent: #6fe0aa;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #121814;
+    --paper-raised: #1a221c;
+    --ink: #eef2ec;
+    --ink-soft: #b7c3ba;
+    --ink-faint: #7d8b81;
+    --line: #2c352d;
+    --line-soft: #232b25;
+    --emerald: #34d399;
+    --emerald-ink: #0b1510;
+    --emerald-soft: #16291f;
+    --amber: #e0a83f;
+    --amber-soft: #2b2110;
+    --slate: #9fb2c2;
+    --slate-soft: #1b2530;
+    --code-bg: #0d1310;
+    --code-ink: #cfe9d9;
+    --code-accent: #6fe0aa;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.55;
+  }
+  h1, h2, h3 { font-family: "Fraunces", Georgia, serif; text-wrap: balance; margin: 0; }
+  code, .mono, .cmd, .idname { font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace; }
+
+  .wrap { max-width: 760px; margin: 0 auto; padding: 56px 24px 96px; }
+
+  /* ---- Header ---- */
+  .kicker {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--emerald); font-weight: 600; margin-bottom: 14px;
+  }
+  .kicker::before { content: ""; width: 16px; height: 2px; background: var(--emerald); display: inline-block; }
+  h1 { font-size: clamp(2rem, 5vw, 2.7rem); font-weight: 600; letter-spacing: -0.01em; }
+  .lede { font-size: 1.05rem; color: var(--ink-soft); max-width: 58ch; margin-top: 14px; }
+
+  .status-row {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 28px;
+  }
+  .status-chip {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--paper-raised); border: 1px solid var(--line-soft);
+    border-radius: 10px; padding: 9px 14px; box-shadow: var(--shadow);
+    font-size: 0.86rem;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot.live { background: var(--emerald); }
+  .dot.pending { background: var(--amber); }
+  .status-chip b { font-family: "Fraunces", serif; font-weight: 600; }
+
+  /* ---- Section headers ---- */
+  .part-head {
+    display: flex; align-items: baseline; gap: 14px;
+    margin: 72px 0 8px;
+  }
+  .part-num {
+    font-family: "Fraunces", serif; font-size: 0.95rem; color: var(--emerald);
+    font-weight: 600; letter-spacing: 0.02em;
+  }
+  .part-head h2 { font-size: 1.7rem; font-weight: 600; }
+  .part-sub { color: var(--ink-soft); font-size: 0.98rem; margin: 10px 0 36px; max-width: 62ch; }
+
+  /* ---- Step timeline ---- */
+  .steps { position: relative; }
+  .steps::before {
+    content: "";
+    position: absolute; left: 17px; top: 8px; bottom: 8px; width: 0;
+    border-left: 2px dashed var(--line);
+  }
+  .step { position: relative; padding: 0 0 34px 52px; }
+  .step:last-child { padding-bottom: 0; }
+  .step-num {
+    position: absolute; left: 0; top: 0; width: 36px; height: 36px;
+    border-radius: 50%; background: var(--paper-raised); border: 1.5px solid var(--line);
+    display: flex; align-items: center; justify-content: center;
+    font-family: "Fraunces", serif; font-weight: 600; font-size: 0.95rem; color: var(--ink-soft);
+    z-index: 1;
+  }
+  .step.done .step-num { background: var(--emerald); border-color: var(--emerald); color: var(--emerald-ink); }
+  .step.blocked .step-num { background: var(--amber-soft); border-color: var(--amber); color: var(--amber); }
+
+  .step-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+  .step-title h3 { font-size: 1.12rem; font-weight: 600; }
+  .badge {
+    font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600;
+    padding: 3px 8px; border-radius: 100px;
+  }
+  .badge.done { background: var(--emerald-soft); color: var(--emerald); }
+  .badge.blocked { background: var(--amber-soft); color: var(--amber); }
+  .badge.todo { background: var(--slate-soft); color: var(--slate); }
+
+  .step p { margin: 0 0 12px; color: var(--ink-soft); font-size: 0.96rem; max-width: 60ch; }
+  .step p:last-child { margin-bottom: 0; }
+  .step a { color: var(--emerald); }
+
+  label.check {
+    display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
+    font-size: 0.96rem; color: var(--ink-soft); margin: 12px 0 4px; max-width: 60ch;
+  }
+  label.check input {
+    appearance: none; width: 18px; height: 18px; margin-top: 2px; flex-shrink: 0;
+    border: 1.5px solid var(--line); border-radius: 5px; background: var(--paper-raised);
+    cursor: pointer; position: relative;
+  }
+  label.check input:checked { background: var(--emerald); border-color: var(--emerald); }
+  label.check input:checked::after {
+    content: ""; position: absolute; left: 5px; top: 1px; width: 5px; height: 9px;
+    border: solid var(--emerald-ink); border-width: 0 2px 2px 0; transform: rotate(40deg);
+  }
+  label.check span.done-text { text-decoration: line-through; color: var(--ink-faint); }
+
+  pre {
+    background: var(--code-bg); color: var(--code-ink); border-radius: 12px;
+    padding: 16px 18px; overflow-x: auto; font-size: 0.84rem; line-height: 1.6;
+    margin: 4px 0 0; box-shadow: var(--shadow);
+  }
+  pre .c1 { color: var(--code-accent); }
+
+  .path {
+    display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    font-size: 0.88rem; color: var(--ink-soft); margin-bottom: 10px;
+  }
+  .path .seg { background: var(--slate-soft); color: var(--slate); padding: 3px 9px; border-radius: 6px; font-size: 0.82rem; }
+  .path .arrow { color: var(--ink-faint); }
+
+  /* ---- Agent cards ---- */
+  .agents { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 28px 0 44px; }
+  @media (max-width: 640px) { .agents { grid-template-columns: 1fr; } }
+  .agent-card {
+    background: var(--paper-raised); border: 1px solid var(--line-soft); border-radius: 14px;
+    padding: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px;
+  }
+  .agent-role {
+    font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; color: var(--emerald);
+  }
+  .agent-card h3 { font-size: 1.05rem; font-weight: 600; }
+  .agent-card p { margin: 0; font-size: 0.88rem; color: var(--ink-soft); }
+  .agent-card .job {
+    margin-top: auto; font-size: 0.78rem; color: var(--ink-faint); font-family: "IBM Plex Mono", monospace;
+    border-top: 1px solid var(--line-soft); padding-top: 10px;
+  }
+
+  /* ---- Flow strip ---- */
+  .flow {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    background: var(--paper-raised); border: 1px solid var(--line-soft); border-radius: 14px;
+    padding: 18px; box-shadow: var(--shadow); margin: 8px 0 44px;
+  }
+  .flow-node {
+    display: flex; flex-direction: column; gap: 3px;
+    padding: 10px 14px; border-radius: 10px; background: var(--slate-soft);
+    font-size: 0.84rem; min-width: 110px;
+  }
+  .flow-node b { font-family: "Fraunces", serif; font-size: 0.95rem; }
+  .flow-node span { color: var(--ink-faint); font-size: 0.74rem; }
+  .flow-node.gate { background: var(--emerald-soft); }
+  .flow-node.gate b { color: var(--emerald); }
+  .flow-node.live { background: var(--amber-soft); }
+  .flow-node.live b { color: var(--amber); }
+  .flow-arrow { color: var(--ink-faint); font-size: 1.1rem; }
+
+  table.secrets {
+    width: 100%; border-collapse: collapse; margin: 18px 0 4px; font-size: 0.9rem;
+    background: var(--paper-raised); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow);
+  }
+  table.secrets th, table.secrets td {
+    text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
+  }
+  table.secrets th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); font-weight: 600; }
+  table.secrets tr:last-child td { border-bottom: none; }
+  table.secrets td.mono { color: var(--emerald); }
+
+  footer {
+    margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--line-soft);
+    color: var(--ink-faint); font-size: 0.84rem;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .step, .agent-card, .flow-node { transition: transform 0.15s ease; }
+  }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<div class="wrap">
+
+  <div class="kicker">Apex Badminton Club</div>
+  <h1>Deploy runbook</h1>
+  <p class="lede">Two things to finish, in order: get Dev / QA / Prod fully wired, then hand deployment to three automated checks so a <code>git push</code> is the only step left.</p>
+
+  <div class="flow" style="border-color: var(--amber); margin-bottom: 0;">
+    <div class="flow-node live" style="min-width: auto;"><b>&#9888; Redeploy needed</b><span>Step 5, Part 1</span></div>
+    <span style="color: var(--ink-soft); font-size: 0.9rem; max-width: 46ch;">A real bug in the public analytics endpoint was found and fixed at the database level on Prod and Dev. The site needs a redeploy to pick up the matching frontend fix &mdash; see the flagged step below.</span>
+  </div>
+
+  <div class="status-row">
+    <div class="status-chip"><span class="dot live"></span> Prod &mdash; <b>live</b>, fix ready to ship</div>
+    <div class="status-chip"><span class="dot live"></span> Dev &mdash; <b>ready</b>, fix ready to ship</div>
+    <div class="status-chip"><span class="dot live"></span> QA &mdash; <b>schema ready</b>, shares Dev's project</div>
+    <div class="status-chip"><span class="dot pending"></span> Pipeline &mdash; <b>built</b>, awaiting secrets</div>
+  </div>
+
+  <!-- ============ PART ONE ============ -->
+  <div class="part-head">
+    <span class="part-num">Part 1</span>
+    <h2>Dev, QA &amp; Prod setup</h2>
+  </div>
+  <p class="part-sub">Prod never moves. QA turned out to share Dev's Supabase project instead of getting its own &mdash; Supabase's free-project cap is per account, not per org, so a third project wasn't available. It's fully isolated at the data level anyway, via its own Postgres schema.</p>
+
+  <div class="steps">
+
+    <div class="step done">
+      <div class="step-title"><h3>Second org created, Dev transferred into it</h3><span class="badge done">done</span></div>
+      <p>Prod stayed in <span class="mono">NJ Badminton Org</span>, untouched the whole time. Dev now lives in a separate org, so the two can never collide.</p>
+    </div>
+
+    <div class="step done">
+      <div class="step-title"><h3>QA schema built inside Dev's project</h3><span class="badge done">done, verified</span></div>
+      <p>A second Postgres schema (<span class="mono">qa</span>) alongside Dev's <span class="mono">public</span> &mdash; its own tables, RLS policies, <span class="mono">register_for_apex</span> function, and analytics functions. Verified directly: anon can call the public stats and register, anon <em>cannot</em> read raw rows, admin access works &mdash; same safety posture as Prod and Dev.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-title"><h3>Expose the <span class="mono">qa</span> schema</h3><span class="badge todo">1 min, you</span></div>
+      <p>Open <span class="mono">apex&#8209;badminton&#8209;dev</span> in the dashboard &rarr; <span class="mono">Project Settings &rarr; API &rarr; Data API</span> &rarr; <b>Exposed schemas</b> &rarr; add <span class="mono">qa</span> next to <span class="mono">public</span> &rarr; Save. Without this, QA gets a "schema not found" error.</p>
+      <label class="check"><input type="checkbox" data-key="s1"><span>qa schema exposed</span></label>
+    </div>
+
+    <div class="step">
+      <div class="step-title"><h3>One-time Vercel setup &mdash; Dev</h3><span class="badge todo">can start now</span></div>
+      <p>A fresh clone of your repo, checked out to its own branch, linked to its own Vercel project:</p>
+      <pre>git clone https://github.com/rkandala1231/apex-badminton.git apex-badminton-dev
+cd apex-badminton-dev
+git checkout -b dev &amp;&amp; git push -u origin dev
+copy ..\apex-react\.env.development .env
+npm install
+npx vercel login
+npx vercel                <span class="c1"># project name: apex-badminton-dev</span>
+npx vercel env add VITE_SUPABASE_URL production
+npx vercel env add VITE_SUPABASE_ANON_KEY production
+npx vercel --prod</pre>
+      <label class="check"><input type="checkbox" data-key="s4"><span>Dev deployed once</span></label>
+    </div>
+
+    <div class="step">
+      <div class="step-title"><h3>One-time Vercel setup &mdash; QA</h3><span class="badge todo">after schema is exposed</span></div>
+      <p>Same pattern &mdash; note <span class="mono">.env.qa</span> uses the <em>same</em> URL/key as Dev, plus one extra variable for the schema:</p>
+      <pre>git clone https://github.com/rkandala1231/apex-badminton.git apex-badminton-qa
+cd apex-badminton-qa
+git checkout -b qa &amp;&amp; git push -u origin qa
+copy ..\apex-react\.env.qa .env
+npm install
+npx vercel                <span class="c1"># project name: apex-badminton-qa</span>
+npx vercel env add VITE_SUPABASE_URL production
+npx vercel env add VITE_SUPABASE_ANON_KEY production
+npx vercel env add VITE_SUPABASE_SCHEMA production   <span class="c1"># value: qa</span>
+npx vercel --prod</pre>
+      <label class="check"><input type="checkbox" data-key="s5"><span>QA deployed once</span></label>
+    </div>
+
+    <div class="step blocked">
+      <div class="step-title"><h3>Redeploy Prod and Dev &mdash; ships the analytics fix</h3><span class="badge blocked">do this soon</span></div>
+      <p>A real bug was found while wiring this up: the earlier fix for a Supabase security warning silently broke the public <span class="mono">/analytics</span> page for real visitors (permission error instead of stats). It's already fixed at the database level on Prod and Dev, verified. Pull the updated <span class="mono">src/lib/queries.ts</span> and <span class="mono">src/lib/supabase.ts</span> into both folders, then <span class="mono">npx vercel --prod</span> in each to ship it.</p>
+      <label class="check"><input type="checkbox" data-key="s11"><span>Prod redeployed</span></label>
+      <label class="check"><input type="checkbox" data-key="s12"><span>Dev redeployed</span></label>
+    </div>
+
+  </div>
+
+  <!-- ============ PART TWO ============ -->
+  <div class="part-head">
+    <span class="part-num">Part 2</span>
+    <h2>Handing deploys to the agents</h2>
+  </div>
+  <p class="part-sub">Three GitHub Actions jobs run on every push. Set the following up once, and <span class="mono">git push</span> becomes the only deploy step you ever type again.</p>
+
+  <div class="agents">
+    <div class="agent-card">
+      <span class="agent-role">01 &middot; Security</span>
+      <h3>Checks before anything ships</h3>
+      <p>Scans dependencies for known vulnerabilities, scans for leaked secrets, and blocks the build if a real <span class="mono">.env</span> file or a service-role key ever gets committed.</p>
+      <div class="job">job: security</div>
+    </div>
+    <div class="agent-card">
+      <span class="agent-role">02 &middot; Evals &amp; guardrails</span>
+      <h3>The QA pass, automated</h3>
+      <p>Typechecks, lints, builds, then drives a headless browser through all 6 routes &mdash; fails on any crash, blank page, or uncaught error. The same check run by hand before, now on every push.</p>
+      <div class="job">job: evals</div>
+    </div>
+    <div class="agent-card">
+      <span class="agent-role">03 &middot; Deployment</span>
+      <h3>Ships to the right place</h3>
+      <p>Only runs if the two above pass. Reads which branch triggered the run and deploys to that environment's Vercel project &mdash; dev, qa, or the real, public site.</p>
+      <div class="job">job: deploy</div>
+    </div>
+  </div>
+
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-title"><h3>Get a Vercel token</h3><span class="badge todo">1 min</span></div>
+      <p><a href="https://vercel.com/account/tokens" target="_blank" rel="noopener">vercel.com/account/tokens</a> &rarr; Create Token &rarr; name it <span class="mono">github-actions</span> &rarr; copy it.</p>
+      <label class="check"><input type="checkbox" data-key="s6"><span>Token copied</span></label>
+    </div>
+
+    <div class="step">
+      <div class="step-title"><h3>Grab the org ID and three project IDs</h3><span class="badge todo">2 min</span></div>
+      <p>After <span class="mono">npx vercel</span> links a folder, open <span class="mono">.vercel/project.json</span> in it:</p>
+      <pre>{ "orgId": "team_xxxxxxxx", "projectId": "prj_xxxxxxxx" }</pre>
+      <p><span class="mono">orgId</span> is the same in all three folders &mdash; grab it once. <span class="mono">projectId</span> is different for each of the three &mdash; grab all three.</p>
+      <label class="check"><input type="checkbox" data-key="s7"><span>All 4 IDs collected</span></label>
+    </div>
+
+    <div class="step">
+      <div class="step-title"><h3>Add 5 secrets to GitHub</h3><span class="badge todo">2 min</span></div>
+      <p>Repo &rarr; <span class="mono">Settings &rarr; Secrets and variables &rarr; Actions &rarr; New repository secret</span>:</p>
+      <table class="secrets">
+        <tr><th>Secret</th><th>Value</th></tr>
+        <tr><td class="mono">VERCEL_TOKEN</td><td>the token from step 1</td></tr>
+        <tr><td class="mono">VERCEL_ORG_ID</td><td>the shared <span class="mono">orgId</span></td></tr>
+        <tr><td class="mono">VERCEL_PROJECT_ID_DEV</td><td><span class="mono">projectId</span> for apex-badminton-dev</td></tr>
+        <tr><td class="mono">VERCEL_PROJECT_ID_QA</td><td><span class="mono">projectId</span> for apex-badminton-qa</td></tr>
+        <tr><td class="mono">VERCEL_PROJECT_ID_PROD</td><td><span class="mono">projectId</span> for apexclubj</td></tr>
+      </table>
+      <p>No Supabase key belongs here &mdash; the pipeline pulls those straight from each Vercel project's own settings.</p>
+      <label class="check"><input type="checkbox" data-key="s8"><span>Secrets added</span></label>
+    </div>
+
+    <div class="step">
+      <div class="step-title"><h3>Turn on branch protection</h3><span class="badge todo">optional, recommended</span></div>
+      <p><span class="mono">Settings &rarr; Branches &rarr; Add rule</span> for <span class="mono">main</span> &rarr; require status checks <span class="mono">security</span> and <span class="mono">evals</span> to pass before merging. Now a failing agent can physically block a merge.</p>
+      <label class="check"><input type="checkbox" data-key="s9"><span>Protection on</span></label>
+    </div>
+
+    <div class="step">
+      <div class="step-title"><h3>Push the pipeline itself</h3><span class="badge todo">one commit</span></div>
+      <p>Copy <span class="mono">.github/workflows/pipeline.yml</span>, <span class="mono">scripts/smoke-test.mjs</span>, and the updated <span class="mono">package.json</span> into all three folders (or merge <span class="mono">main</span> down into <span class="mono">qa</span> and <span class="mono">dev</span>), commit, push. All three branches need it to run their own checks.</p>
+      <label class="check"><input type="checkbox" data-key="s10"><span>Pipeline live on all 3 branches</span></label>
+    </div>
+
+  </div>
+
+  <h3 style="margin: 44px 0 16px; font-size: 1.1rem;">How a change moves, once this is done</h3>
+  <div class="flow">
+    <div class="flow-node"><b>dev branch</b><span>you push</span></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-node gate"><b>security + evals</b><span>auto</span></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-node live"><b>Dev site</b><span>auto-deployed</span></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-node"><b>merge &rarr; qa</b><span>you push</span></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-node gate"><b>security + evals</b><span>auto</span></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-node live"><b>QA site</b><span>auto-deployed</span></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-node"><b>merge &rarr; main</b><span>you push</span></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-node gate"><b>security + evals</b><span>auto</span></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-node live"><b>apexclubj.vercel.app</b><span>the real site</span></div>
+  </div>
+
+  <footer>
+    Apex Badminton Club &middot; internal runbook &middot; checkbox state is saved in this browser only.
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    try {
+      document.querySelectorAll('label.check input[type="checkbox"]').forEach(function (box) {
+        var key = 'apex-runbook-' + box.dataset.key;
+        var saved = localStorage.getItem(key);
+        if (saved === '1') { box.checked = true; box.nextElementSibling.classList.add('done-text'); }
+        box.addEventListener('change', function () {
+          try { localStorage.setItem(key, box.checked ? '1' : '0'); } catch (e) {}
+          box.nextElementSibling.classList.toggle('done-text', box.checked);
+        });
+      });
+    } catch (e) {}
+  })();
+</script>

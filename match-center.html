@@ -1,0 +1,538 @@
+<title>Match Center</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Anton&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg: #131110;
+    --surface-1: #1c1815;
+    --surface-2: #211c18;
+    --surface-3: #272119;
+    --border: #362f27;
+    --border-soft: #241f1a;
+    --text-primary: #f7f3ec;
+    --text-secondary: #c9c0b4;
+    --text-muted: #948b7f;
+    --accent: #10b981;
+    --accent-dim: #0f766e;
+    --accent-hover: #34d399;
+    --accent-soft: rgba(16, 185, 129, 0.14);
+    --gold: #ffb627;
+    --gold-soft: rgba(255, 182, 39, 0.14);
+    --live: #ff5a5f;
+    --live-soft: rgba(255, 90, 95, 0.14);
+    --ev-ms: #3987e5; --ev-ms-soft: rgba(57,135,229,0.14);
+    --ev-ws: #d95926; --ev-ws-soft: rgba(217,89,38,0.14);
+    --ev-md: #199e70; --ev-md-soft: rgba(25,158,112,0.14);
+    --ev-wd: #c98500; --ev-wd-soft: rgba(201,133,0,0.14);
+  }
+
+  * { box-sizing: border-box; }
+  html { color-scheme: dark; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text-primary);
+    font-family: 'Manrope', -apple-system, sans-serif; -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 {
+    font-family: 'Anton', 'Archivo Black', sans-serif; font-weight: 400; letter-spacing: 0.01em;
+    text-transform: uppercase; text-wrap: balance; margin: 0; color: var(--text-primary);
+  }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  button, select { font-family: inherit; cursor: pointer; }
+  button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  [hidden] { display: none !important; }
+  ::-webkit-scrollbar { height: 6px; width: 6px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* ---- Shell ---- */
+  .banner {
+    background: var(--gold-soft); border-bottom: 1px solid rgba(255,182,39,0.3);
+    color: var(--gold); font-size: 0.8rem; font-weight: 600; text-align: center;
+    padding: 9px 16px;
+  }
+  header.top {
+    display: flex; align-items: center; gap: 12px; padding: 18px 20px;
+    border-bottom: 1px solid var(--border-soft); max-width: 1180px; margin: 0 auto;
+  }
+  .mark {
+    width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--accent), var(--gold));
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Anton', sans-serif; color: #171310; font-size: 1.05rem;
+  }
+  .top .eyebrow {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--accent); font-weight: 600;
+  }
+  .top h1 { font-size: 1.4rem; margin-top: 2px; }
+
+  .shell { display: flex; max-width: 1180px; margin: 0 auto; min-height: 70vh; }
+
+  /* ---- Sidebar nav ---- */
+  nav.rail {
+    width: 168px; flex-shrink: 0; border-right: 1px solid var(--border-soft);
+    padding: 16px 10px; display: flex; flex-direction: column; gap: 4px;
+  }
+  nav.rail button {
+    display: flex; align-items: center; gap: 10px; background: none; border: none;
+    color: var(--text-secondary); padding: 11px 10px; border-radius: 10px; text-align: left;
+    font-weight: 700; font-size: 0.82rem; letter-spacing: 0.02em; text-transform: uppercase;
+    border-left: 2px solid transparent; transition: background 0.15s, color 0.15s;
+  }
+  nav.rail button svg { flex-shrink: 0; opacity: 0.85; }
+  nav.rail button:hover { background: var(--surface-1); color: var(--text-primary); }
+  nav.rail button[aria-current="true"] {
+    background: var(--accent-soft); color: var(--accent-hover); border-left-color: var(--accent);
+  }
+
+  main { flex: 1; min-width: 0; padding: 22px 24px 60px; }
+
+  .section-head { margin-bottom: 18px; }
+  .section-head h2 { font-size: 1.5rem; }
+  .section-head p { color: var(--text-secondary); font-size: 0.88rem; margin: 6px 0 0; max-width: 56ch; line-height: 1.55; }
+
+  /* ---- Subtabs ---- */
+  .subtabs { display: flex; gap: 8px; margin-bottom: 18px; overflow-x: auto; padding-bottom: 2px; }
+  .subtabs button {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 100px;
+    padding: 8px 15px; color: var(--text-secondary); font-weight: 700; font-size: 0.8rem;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .subtabs button[aria-current="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--text-primary); }
+
+  /* ---- Cards / tables ---- */
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border-soft); border-radius: 14px;
+    padding: 16px 18px;
+  }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+  th {
+    text-align: left; font-family: 'JetBrains Mono', monospace; font-size: 0.68rem;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); font-weight: 600;
+    padding: 0 10px 10px; white-space: nowrap;
+  }
+  td { padding: 11px 10px; border-top: 1px solid var(--border-soft); vertical-align: middle; }
+  tr:hover td { background: var(--surface-2); }
+
+  .ev-pill {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; font-weight: 700;
+    padding: 3px 8px; border-radius: 6px; letter-spacing: 0.02em;
+  }
+  .ev-pill.MS { background: var(--ev-ms-soft); color: var(--ev-ms); }
+  .ev-pill.WS { background: var(--ev-ws-soft); color: var(--ev-ws); }
+  .ev-pill.MD { background: var(--ev-md-soft); color: var(--ev-md); }
+  .ev-pill.WD { background: var(--ev-wd-soft); color: var(--ev-wd); }
+  .ev-pill.XD { background: rgba(213,81,129,0.14); color: #d55181; }
+  .ev-pill.TEAM { background: rgba(47,155,47,0.14); color: #2f9b2f; }
+
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 0.72rem; font-weight: 700;
+    padding: 3px 9px; border-radius: 100px; text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .status-pill.final { background: var(--surface-3); color: var(--text-muted); }
+  .status-pill.upcoming { background: var(--accent-soft); color: var(--accent-hover); }
+  .status-pill.live { background: var(--live-soft); color: var(--live); }
+  .status-pill.live .blip { width: 6px; height: 6px; border-radius: 50%; background: var(--live); animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  .court-tag { color: var(--text-muted); font-size: 0.78rem; }
+
+  /* ---- Players ---- */
+  .player-row { display: flex; justify-content: space-between; align-items: center; padding: 11px 4px; border-top: 1px solid var(--border-soft); gap: 10px; flex-wrap: wrap; }
+  .player-row:first-child { border-top: none; }
+  .player-name { font-weight: 700; font-size: 0.9rem; }
+  .player-meta { color: var(--text-muted); font-size: 0.78rem; }
+  .player-events { display: flex; gap: 5px; }
+  .college-group { margin-bottom: 20px; }
+  .college-group:last-child { margin-bottom: 0; }
+  .college-name { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-hover); font-weight: 700; margin-bottom: 6px; }
+
+  /* ---- Live score cards ---- */
+  .live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 22px; }
+  .live-card { background: var(--surface-1); border: 1px solid var(--live); border-radius: 14px; padding: 16px; }
+  .live-card .top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .live-card .sides { display: flex; flex-direction: column; gap: 8px; }
+  .live-card .side-line { display: flex; justify-content: space-between; align-items: center; }
+  .live-card .side-line .nm { font-weight: 700; font-size: 0.88rem; }
+  .live-card .side-line .sc { font-family: 'JetBrains Mono', monospace; font-size: 1.3rem; font-weight: 700; }
+
+  /* ---- Stat tiles ---- */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 22px; }
+  .stat-tile { background: var(--surface-1); border: 1px solid var(--border-soft); border-radius: 12px; padding: 16px; }
+  .stat-tile .v { font-family: 'Anton', sans-serif; font-size: 1.9rem; }
+  .stat-tile .l { color: var(--text-muted); font-size: 0.76rem; margin-top: 2px; }
+
+  /* ---- Bracket ---- */
+  .bracket-scroll { overflow-x: auto; padding: 6px 2px 14px; }
+  .bracket { display: flex; gap: 34px; min-width: 640px; }
+  .round { display: flex; flex-direction: column; justify-content: space-around; gap: 18px; flex: 1; min-width: 168px; }
+  .round-label { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); text-align: center; margin-bottom: 6px; }
+  .match-box {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px 10px; position: relative;
+  }
+  .match-box .mp { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; font-size: 0.8rem; }
+  .match-box .mp.winner .nm { color: var(--text-primary); font-weight: 700; }
+  .match-box .mp:not(.winner) .nm { color: var(--text-muted); }
+  .match-box .mp .sc { font-family: 'JetBrains Mono', monospace; font-size: 0.76rem; color: var(--text-muted); }
+  .match-box .divider { border-top: 1px solid var(--border-soft); margin: 2px 0; }
+  .match-box .meta { font-size: 0.65rem; color: var(--text-muted); margin-top: 5px; text-align: center; font-family: 'JetBrains Mono', monospace; }
+  .tbd { color: var(--text-muted); font-style: normal; }
+
+  /* ---- Stream placeholder ---- */
+  .stream-frame {
+    aspect-ratio: 16/9; background: var(--surface-1); border: 1px solid var(--border-soft);
+    border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; max-width: 720px;
+  }
+  .play-icon {
+    width: 64px; height: 64px; border-radius: 50%; background: var(--surface-3); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .stream-frame p { color: var(--text-muted); font-size: 0.86rem; text-align: center; max-width: 34ch; margin: 0; }
+  .stream-frame .eyebrow2 { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); }
+
+  @media (max-width: 720px) {
+    .shell { flex-direction: column; }
+    nav.rail {
+      width: 100%; flex-direction: row; overflow-x: auto; border-right: none;
+      border-bottom: 1px solid var(--border-soft); padding: 10px 12px;
+    }
+    nav.rail button { flex-direction: column; gap: 4px; font-size: 0.66rem; padding: 8px 12px; border-left: none; border-bottom: 2px solid transparent; }
+    nav.rail button[aria-current="true"] { border-left-color: transparent; border-bottom-color: var(--accent); }
+    main { padding: 18px 16px 50px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .status-pill.live .blip { animation: none; }
+  }
+</style>
+
+<div class="banner">Prototype preview &mdash; shown with sample tournament&#8209;day data, not live results</div>
+
+<header class="top">
+  <div class="mark">A</div>
+  <div>
+    <div class="eyebrow">Apex Badminton Club</div>
+    <h1>Match Center</h1>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="rail" id="rail" aria-label="Tournament sections"></nav>
+  <main id="main"></main>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------------------------------------------------------------
+  // Mock data — sample rosters, matches and results for the prototype.
+  // Replace with live Supabase-backed data when this moves into the app.
+  // ---------------------------------------------------------------
+
+  var COLLEGES = [
+    'Rutgers–New Brunswick', 'Rutgers–Camden', 'Princeton University', 'Montclair State University',
+    'The College of New Jersey', 'Seton Hall University', 'Stevens Institute of Technology',
+    'Fairleigh Dickinson University', 'Drew University', 'William Paterson University'
+  ];
+
+  var PLAYERS = [
+    { name: 'Arjun Mehta', college: 'Rutgers–New Brunswick', events: ['MS', 'MD'] },
+    { name: 'Ravi Shah', college: 'Rutgers–New Brunswick', events: ['MD'] },
+    { name: 'Priya Nair', college: 'Rutgers–New Brunswick', events: ['WS', 'WD'] },
+    { name: 'Anya Rao', college: 'Rutgers–New Brunswick', events: ['WD'] },
+    { name: 'Jake Sullivan', college: 'Rutgers–Camden', events: ['MS'] },
+    { name: 'Daniel Cho', college: 'Princeton University', events: ['MS', 'MD'] },
+    { name: 'Leo Park', college: 'Princeton University', events: ['MD'] },
+    { name: 'Sofia Martinez', college: 'Princeton University', events: ['WS', 'WD'] },
+    { name: 'Claire Dubois', college: 'Princeton University', events: ['WD'] },
+    { name: 'Omar Hassan', college: 'Montclair State University', events: ['MS'] },
+    { name: 'Elena Petrova', college: 'Montclair State University', events: ['WS'] },
+    { name: 'Kevin Liu', college: 'The College of New Jersey', events: ['MS', 'MD'] },
+    { name: 'Sam Osei', college: 'The College of New Jersey', events: ['MD'] },
+    { name: 'Grace Kim', college: 'The College of New Jersey', events: ['WS', 'WD'] },
+    { name: 'Hana Suzuki', college: 'The College of New Jersey', events: ['WD'] },
+    { name: 'Marcus Webb', college: 'Seton Hall University', events: ['MS', 'MD'] },
+    { name: 'Tyler Brooks', college: 'Seton Hall University', events: ['MD'] },
+    { name: 'Amara Johnson', college: 'Seton Hall University', events: ['WS', 'WD'] },
+    { name: 'Zoe Bennett', college: 'Seton Hall University', events: ['WD'] },
+    { name: 'Ryan Patel', college: 'Stevens Institute of Technology', events: ['MS'] },
+    { name: 'Maya Thompson', college: 'Stevens Institute of Technology', events: ['WS'] },
+    { name: 'Julia Chen', college: 'Fairleigh Dickinson University', events: ['WS'] },
+    { name: 'Ethan Wu', college: 'Drew University', events: ['MS'] },
+    { name: 'Nadia Ali', college: 'William Paterson University', events: ['WS'] }
+  ];
+
+  // Draws — hand-authored rounds so results can mix final / live / upcoming realistically.
+  var DRAWS = {
+    MS: {
+      rounds: [
+        { label: 'Quarterfinal', matches: [
+          { p1: 'Arjun Mehta', p2: 'Ethan Wu', s1: 15, s2: 9, status: 'final' },
+          { p1: 'Daniel Cho', p2: 'Jake Sullivan', s1: 15, s2: 12, status: 'final' },
+          { p1: 'Marcus Webb', p2: 'Omar Hassan', status: 'upcoming', meta: '2:15 PM · Court 2' },
+          { p1: 'Kevin Liu', p2: 'Ryan Patel', status: 'upcoming', meta: '2:15 PM · Court 3' }
+        ]},
+        { label: 'Semifinal', matches: [
+          { p1: 'Arjun Mehta', p2: 'Daniel Cho', status: 'upcoming', meta: '3:30 PM · Court 1' },
+          { p1: null, p2: null, status: 'upcoming', meta: '3:30 PM · Court 2' }
+        ]},
+        { label: 'Final', matches: [
+          { p1: null, p2: null, status: 'upcoming', meta: '5:00 PM · Court 1' }
+        ]}
+      ]
+    },
+    WS: {
+      rounds: [
+        { label: 'Quarterfinal', matches: [
+          { p1: 'Priya Nair', p2: 'Julia Chen', s1: 15, s2: 7, status: 'final' },
+          { p1: 'Sofia Martinez', p2: 'Nadia Ali', s1: 8, s2: 6, status: 'live', meta: 'Court 4' },
+          { p1: 'Grace Kim', p2: 'Maya Thompson', status: 'upcoming', meta: '1:45 PM · Court 3' },
+          { p1: 'Amara Johnson', p2: 'Elena Petrova', status: 'upcoming', meta: '1:45 PM · Court 4' }
+        ]},
+        { label: 'Semifinal', matches: [
+          { p1: 'Priya Nair', p2: null, status: 'upcoming', meta: '3:30 PM · Court 3' },
+          { p1: null, p2: null, status: 'upcoming', meta: '3:30 PM · Court 4' }
+        ]},
+        { label: 'Final', matches: [
+          { p1: null, p2: null, status: 'upcoming', meta: '5:00 PM · Court 2' }
+        ]}
+      ]
+    },
+    MD: {
+      rounds: [
+        { label: 'Semifinal', matches: [
+          { p1: 'Mehta / Shah', p2: 'Liu / Osei', s1: 15, s2: 11, status: 'final' },
+          { p1: 'Cho / Park', p2: 'Webb / Brooks', s1: 9, s2: 9, status: 'live', meta: 'Court 1' }
+        ]},
+        { label: 'Final', matches: [
+          { p1: 'Mehta / Shah', p2: null, status: 'upcoming', meta: '4:15 PM · Court 1' }
+        ]}
+      ]
+    },
+    WD: {
+      rounds: [
+        { label: 'Semifinal', matches: [
+          { p1: 'Nair / Rao', p2: 'Johnson / Bennett', status: 'upcoming', meta: '1:00 PM · Court 3' },
+          { p1: 'Martinez / Dubois', p2: 'Kim / Suzuki', status: 'upcoming', meta: '1:00 PM · Court 4' }
+        ]},
+        { label: 'Final', matches: [
+          { p1: null, p2: null, status: 'upcoming', meta: '4:15 PM · Court 2' }
+        ]}
+      ]
+    }
+  };
+
+  var SCHEDULE = [
+    { time: '8:00 AM', event: 'TEAM', match: 'Pool A: Rutgers–NB vs. Princeton', court: 'Court 1', status: 'final' },
+    { time: '8:00 AM', event: 'TEAM', match: 'Pool B: Seton Hall vs. TCNJ', court: 'Court 2', status: 'final' },
+    { time: '9:15 AM', event: 'XD', match: 'Rao / Mehta vs. Dubois / Cho', court: 'Court 3', status: 'final' },
+    { time: '9:15 AM', event: 'MD', match: 'Mehta / Shah vs. Liu / Osei', court: 'Court 1', status: 'final' },
+    { time: '10:00 AM', event: 'WS', match: 'Priya Nair vs. Julia Chen', court: 'Court 2', status: 'final' },
+    { time: '1:00 PM', event: 'WD', match: 'Nair / Rao vs. Johnson / Bennett', court: 'Court 3', status: 'upcoming' },
+    { time: '1:00 PM', event: 'WD', match: 'Martinez / Dubois vs. Kim / Suzuki', court: 'Court 4', status: 'upcoming' },
+    { time: '1:45 PM', event: 'WS', match: 'Sofia Martinez vs. Nadia Ali', court: 'Court 4', status: 'live' },
+    { time: '1:45 PM', event: 'MD', match: 'Cho / Park vs. Webb / Brooks', court: 'Court 1', status: 'live' },
+    { time: '2:15 PM', event: 'MS', match: 'Marcus Webb vs. Omar Hassan', court: 'Court 2', status: 'upcoming' },
+    { time: '2:15 PM', event: 'MS', match: 'Kevin Liu vs. Ryan Patel', court: 'Court 3', status: 'upcoming' },
+    { time: '3:30 PM', event: 'MS', match: 'Semifinal 1 — Court 1', court: 'Court 1', status: 'upcoming' },
+    { time: '4:15 PM', event: 'MD', match: 'Final — Mehta / Shah vs. TBD', court: 'Court 1', status: 'upcoming' },
+    { time: '5:00 PM', event: 'MS', match: 'Final', court: 'Court 1', status: 'upcoming' },
+    { time: '5:00 PM', event: 'WS', match: 'Final', court: 'Court 2', status: 'upcoming' }
+  ];
+
+  var $ = function (id) { return document.getElementById(id); };
+  var rail = $('rail'), mainEl = $('main');
+
+  var SECTIONS = [
+    { id: 'scores', label: 'Scores', icon: iconScores },
+    { id: 'draws', label: 'Draws', icon: iconDraws },
+    { id: 'players', label: 'Players', icon: iconPlayers },
+    { id: 'schedule', label: 'Schedule', icon: iconSchedule },
+    { id: 'stream', label: 'Live Stream', icon: iconStream }
+  ];
+
+  var activeSection = 'scores';
+  var activeSub = { scores: 'live', draws: 'MS', players: 'name' };
+
+  function icon(paths) {
+    return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + paths + '</svg>';
+  }
+  function iconScores() { return icon('<path d="M3 12h4l2-7 4 14 2-7h6"/>'); }
+  function iconDraws() { return icon('<path d="M4 5h4M4 12h4M4 19h4M8 5v14M8 5l6 5.5M8 19l6-5.5M14 10.5h6M14 13.5h6M20 10.5v3"/>'); }
+  function iconPlayers() { return icon('<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="18" cy="9" r="2.4"/><path d="M15.5 20c.2-2.6 2-4.6 4.5-4.9"/>'); }
+  function iconSchedule() { return icon('<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/>'); }
+  function iconStream() { return icon('<rect x="3" y="5" width="14" height="14" rx="2.5"/><path d="M9 9.2v5.6l4.6-2.8L9 9.2z" fill="currentColor" stroke="none"/><path d="M21 9l-4 2.5v1L21 15V9z"/>'); }
+
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+
+  function renderRail() {
+    rail.innerHTML = SECTIONS.map(function (s) {
+      return '<button type="button" data-section="' + s.id + '" aria-current="' + (s.id === activeSection) + '">' + s.icon() + '<span>' + s.label + '</span></button>';
+    }).join('');
+    rail.querySelectorAll('button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        activeSection = btn.getAttribute('data-section');
+        renderRail();
+        renderMain();
+      });
+    });
+  }
+
+  function statusPill(status) {
+    if (status === 'live') return '<span class="status-pill live"><span class="blip"></span>Live</span>';
+    if (status === 'final') return '<span class="status-pill final">Final</span>';
+    return '<span class="status-pill upcoming">Upcoming</span>';
+  }
+
+  // ---- SCORES ----
+  function renderScores() {
+    var sub = activeSub.scores;
+    var html = '<div class="section-head"><h2>Scores</h2><p>Everything happening on the courts today &mdash; live in-progress matches, completed results, and event-level stats.</p></div>';
+    html += '<div class="subtabs">' + ['live', 'completed', 'stats'].map(function (id) {
+      var label = id === 'live' ? 'Live Scores' : id === 'completed' ? 'Completed Matches' : 'Event Statistics';
+      return '<button type="button" data-sub="' + id + '" aria-current="' + (id === sub) + '">' + label + '</button>';
+    }).join('') + '</div>';
+
+    if (sub === 'live') {
+      var live = SCHEDULE.filter(function (m) { return m.status === 'live'; });
+      var liveDetails = { 'Sofia Martinez vs. Nadia Ali': { a: 'Sofia Martinez', b: 'Nadia Ali', sa: 8, sb: 6 }, 'Cho / Park vs. Webb / Brooks': { a: 'Cho / Park', b: 'Webb / Brooks', sa: 9, sb: 9 } };
+      html += '<div class="live-grid">' + live.map(function (m) {
+        var d = liveDetails[m.match] || { a: m.match.split(' vs. ')[0], b: m.match.split(' vs. ')[1], sa: 0, sb: 0 };
+        return '<div class="live-card"><div class="top-row"><span class="ev-pill ' + m.event + '">' + m.event + '</span>' + statusPill('live') + '</div>' +
+          '<div class="sides"><div class="side-line"><span class="nm">' + esc(d.a) + '</span><span class="sc mono">' + d.sa + '</span></div>' +
+          '<div class="side-line"><span class="nm">' + esc(d.b) + '</span><span class="sc mono">' + d.sb + '</span></div></div>' +
+          '<div class="court-tag" style="margin-top:10px;">' + esc(m.court) + '</div></div>';
+      }).join('') + '</div>';
+      if (live.length === 0) html += '<p style="color:var(--text-muted);">No matches live right now.</p>';
+    } else if (sub === 'completed') {
+      var done = SCHEDULE.filter(function (m) { return m.status === 'final'; });
+      html += tableWrap(['Time', 'Event', 'Match', 'Court', ''], done.map(function (m) {
+        return [m.time, '<span class="ev-pill ' + m.event + '">' + m.event + '</span>', esc(m.match), esc(m.court), statusPill('final')];
+      }));
+    } else {
+      var total = SCHEDULE.length, finalCt = SCHEDULE.filter(function (m) { return m.status === 'final'; }).length;
+      var liveCt = SCHEDULE.filter(function (m) { return m.status === 'live'; }).length;
+      var evCounts = {};
+      SCHEDULE.forEach(function (m) { evCounts[m.event] = (evCounts[m.event] || 0) + 1; });
+      html += '<div class="stat-grid">' +
+        stat(total, 'Matches on schedule') + stat(finalCt, 'Completed') + stat(liveCt, 'Live now') + stat(COLLEGES.length, 'Colleges competing') +
+        '</div>';
+      html += '<div class="card"><div class="table-wrap"><table><tr><th>Event</th><th>Matches Scheduled</th></tr>' +
+        Object.keys(evCounts).map(function (ev) { return '<tr><td><span class="ev-pill ' + ev + '">' + ev + '</span></td><td>' + evCounts[ev] + '</td></tr>'; }).join('') +
+        '</table></div></div>';
+    }
+    mainEl.innerHTML = html;
+    wireSubtabs('scores');
+  }
+
+  function stat(v, l) { return '<div class="stat-tile"><div class="v mono">' + v + '</div><div class="l">' + l + '</div></div>'; }
+
+  function tableWrap(headers, rows) {
+    return '<div class="card"><div class="table-wrap"><table><tr>' + headers.map(function (h) { return '<th>' + h + '</th>'; }).join('') +
+      '</tr>' + rows.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + c + '</td>'; }).join('') + '</tr>'; }).join('') + '</table></div></div>';
+  }
+
+  // ---- DRAWS ----
+  function renderDraws() {
+    var sub = activeSub.draws;
+    var html = '<div class="section-head"><h2>Draws</h2><p>Bracket progress for each head-to-head event. Doubles pairs are shown by college; team and mixed doubles draws are posted separately on the day.</p></div>';
+    html += '<div class="subtabs">' + ['MS', 'WS', 'MD', 'WD'].map(function (ev) {
+      return '<button type="button" data-sub="' + ev + '" aria-current="' + (ev === sub) + '"><span class="ev-pill ' + ev + '" style="margin-right:6px;">' + ev + '</span>' + eventName(ev) + '</button>';
+    }).join('') + '</div>';
+
+    var draw = DRAWS[sub];
+    html += '<div class="bracket-scroll"><div class="bracket">' + draw.rounds.map(function (round) {
+      return '<div class="round"><div class="round-label">' + round.label + '</div>' + round.matches.map(function (m) { return matchBox(m); }).join('') + '</div>';
+    }).join('') + '</div></div>';
+
+    mainEl.innerHTML = html;
+    wireSubtabs('draws');
+  }
+
+  function matchBox(m) {
+    var p1 = m.p1 || 'TBD', p2 = m.p2 || 'TBD';
+    var w1 = m.status === 'final' && m.s1 > m.s2, w2 = m.status === 'final' && m.s2 > m.s1;
+    return '<div class="match-box">' +
+      '<div class="mp' + (w1 ? ' winner' : '') + '"><span class="nm' + (m.p1 ? '' : ' tbd') + '">' + esc(p1) + '</span><span class="sc">' + (m.status === 'final' ? m.s1 : '') + '</span></div>' +
+      '<div class="divider"></div>' +
+      '<div class="mp' + (w2 ? ' winner' : '') + '"><span class="nm' + (m.p2 ? '' : ' tbd') + '">' + esc(p2) + '</span><span class="sc">' + (m.status === 'final' ? m.s2 : '') + '</span></div>' +
+      '<div class="meta">' + (m.status === 'live' ? '● live · ' + (m.meta || '') : m.status === 'final' ? 'Final' : (m.meta || 'Upcoming')) + '</div>' +
+      '</div>';
+  }
+
+  function eventName(ev) {
+    return { MS: "Men's Singles", WS: "Women's Singles", MD: "Men's Doubles", WD: "Women's Doubles" }[ev] || ev;
+  }
+
+  // ---- PLAYERS ----
+  function renderPlayers() {
+    var sub = activeSub.players;
+    var html = '<div class="section-head"><h2>Players</h2><p>Every registered athlete, browsable by name or grouped by the college they represent.</p></div>';
+    html += '<div class="subtabs">' + ['name', 'college'].map(function (id) {
+      return '<button type="button" data-sub="' + id + '" aria-current="' + (id === sub) + '">' + (id === 'name' ? 'By Name' : 'By College') + '</button>';
+    }).join('') + '</div>';
+
+    if (sub === 'name') {
+      var sorted = PLAYERS.slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
+      html += '<div class="card">' + sorted.map(function (p) {
+        return '<div class="player-row"><div><div class="player-name">' + esc(p.name) + '</div><div class="player-meta">' + esc(p.college) + '</div></div>' +
+          '<div class="player-events">' + p.events.map(function (e) { return '<span class="ev-pill ' + e + '">' + e + '</span>'; }).join('') + '</div></div>';
+      }).join('') + '</div>';
+    } else {
+      html += COLLEGES.map(function (c) {
+        var roster = PLAYERS.filter(function (p) { return p.college === c; });
+        if (roster.length === 0) return '';
+        return '<div class="college-group"><div class="college-name">' + esc(c) + ' &middot; ' + roster.length + ' players</div><div class="card">' +
+          roster.map(function (p) {
+            return '<div class="player-row"><div class="player-name">' + esc(p.name) + '</div><div class="player-events">' + p.events.map(function (e) { return '<span class="ev-pill ' + e + '">' + e + '</span>'; }).join('') + '</div></div>';
+          }).join('') + '</div></div>';
+      }).join('');
+    }
+    mainEl.innerHTML = html;
+    wireSubtabs('players');
+  }
+
+  // ---- SCHEDULE ----
+  function renderSchedule() {
+    var html = '<div class="section-head"><h2>Schedule</h2><p>All matches for tournament day, in order. Court numbers are illustrative until the venue is confirmed.</p></div>';
+    html += tableWrap(['Time', 'Event', 'Match', 'Court', 'Status'], SCHEDULE.map(function (m) {
+      return [m.time, '<span class="ev-pill ' + m.event + '">' + m.event + '</span>', esc(m.match), esc(m.court), statusPill(m.status)];
+    }));
+    mainEl.innerHTML = html;
+  }
+
+  // ---- STREAM ----
+  function renderStream() {
+    var html = '<div class="section-head"><h2>Live Stream</h2><p>Watch the show court from anywhere. The stream link goes live closer to tournament day.</p></div>';
+    html += '<div class="stream-frame"><div class="play-icon">' + icon('<path d="M9 7.5v9l7-4.5-7-4.5z" fill="currentColor" stroke="none"/>') + '</div>' +
+      '<div class="eyebrow2">Stream starts Nov 7, 2026</div>' +
+      '<p>This will embed the Apex YouTube live stream once the link is ready &mdash; placeholder for now.</p></div>';
+    mainEl.innerHTML = html;
+  }
+
+  function wireSubtabs(section) {
+    mainEl.querySelectorAll('.subtabs button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        activeSub[section] = btn.getAttribute('data-sub');
+        renderMain();
+      });
+    });
+  }
+
+  function renderMain() {
+    if (activeSection === 'scores') renderScores();
+    else if (activeSection === 'draws') renderDraws();
+    else if (activeSection === 'players') renderPlayers();
+    else if (activeSection === 'schedule') renderSchedule();
+    else renderStream();
+  }
+
+  renderRail();
+  renderMain();
+})();
+</script>

@@ -24,18 +24,24 @@ const EMPTY_STATS: SummaryStats = {
 };
 
 async function fetchAnalytics(): Promise<AnalyticsData> {
+  // These are RPC calls to SECURITY DEFINER functions, not table/view selects. Public analytics
+  // only ever return aggregate counts (no PII), and the underlying tables are RLS-locked with no
+  // anon policy — a plain view would either leak raw rows (security definer) or hard-error for
+  // anon (security invoker, since anon has no table grant). A function sidesteps both.
   const [statsRes, eventsRes, regionsRes, trendRes] = await Promise.all([
-    supabase.from('public_summary_stats').select('*').maybeSingle(),
-    supabase.from('public_event_counts').select('*'),
-    supabase.from('public_region_counts').select('*'),
-    supabase.from('public_weekly_trend').select('*').order('week_start'),
+    supabase.rpc('get_public_summary_stats'),
+    supabase.rpc('get_public_event_counts'),
+    supabase.rpc('get_public_region_counts'),
+    supabase.rpc('get_public_weekly_trend'),
   ]);
 
   const firstError = statsRes.error || eventsRes.error || regionsRes.error || trendRes.error;
   if (firstError) throw firstError;
 
+  const statsRow = (statsRes.data as SummaryStats[] | null)?.[0];
+
   return {
-    stats: (statsRes.data as SummaryStats) || EMPTY_STATS,
+    stats: statsRow || EMPTY_STATS,
     events: (eventsRes.data as EventCountRow[]) || [],
     regions: (regionsRes.data as RegionCountRow[]) || [],
     trend: (trendRes.data as WeeklyTrendRow[]) || [],
@@ -76,6 +82,66 @@ export function useAdminRegistrations(enabled: boolean) {
       return (data as AdminRegistrationRow[]) || [];
     },
     enabled,
+  });
+}
+
+export interface AdminStaffRow {
+  email: string;
+  role: 'admin' | 'super_admin';
+  note: string | null;
+  since: string;
+}
+
+export function useAdminStaff(enabled: boolean) {
+  return useQuery({
+    queryKey: ['admin-staff'],
+    queryFn: async (): Promise<AdminStaffRow[]> => {
+      const { data, error } = await supabase.rpc('list_admin_staff');
+      if (error) throw error;
+      return (data as AdminStaffRow[]) || [];
+    },
+    enabled,
+  });
+}
+
+export function useCreateAdminAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      email,
+      password,
+      role,
+      note,
+    }: {
+      email: string;
+      password: string;
+      role: 'admin' | 'super_admin';
+      note?: string;
+    }) => {
+      const { error } = await supabase.rpc('create_admin_account', {
+        p_email: email,
+        p_password: password,
+        p_role: role,
+        p_note: note || null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-staff'] });
+    },
+  });
+}
+
+export function useRemoveAdminAccess() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (email: string) => {
+      const { error } = await supabase.rpc('remove_admin_access', { p_email: email });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-staff'] });
+    },
   });
 }
 

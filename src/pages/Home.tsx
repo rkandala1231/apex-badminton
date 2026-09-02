@@ -1,23 +1,32 @@
+import { useEffect } from 'react';
 import { Nav } from '../components/Nav';
 import { Footer } from '../components/Footer';
-import { Hero } from '../components/sections/Hero';
+import { HomeHero } from '../components/sections/HomeHero';
+import { BrandStatement } from '../components/sections/BrandStatement';
 import { Mission } from '../components/sections/Mission';
-import { Registration } from '../components/sections/Registration';
-import { Tournament } from '../components/sections/Tournament';
-import { Formats } from '../components/sections/Formats';
-import { Analytics } from '../components/sections/Analytics';
+import { CoreValues } from '../components/sections/CoreValues';
+import { WhatWeDo } from '../components/sections/WhatWeDo';
+import { Impact } from '../components/sections/Impact';
+import { FounderMessage } from '../components/sections/FounderMessage';
+import { ClosingCta } from '../components/sections/ClosingCta';
 
 export function Home() {
+  useEffect(() => {
+    document.title = 'Apex Badminton Club — Growing Badminton. Building Community. Inspiring Players.';
+  }, []);
+
   return (
     <>
       <Nav />
       <main id="top">
-        <Hero />
+        <HomeHero />
+        <BrandStatement />
         <Mission />
-        <Registration />
-        <Tournament />
-        <Formats />
-        <Analytics />
+        <CoreValues />
+        <WhatWeDo />
+        <Impact />
+        <FounderMessage />
+        <ClosingCta />
       </main>
       <Footer />
     </>

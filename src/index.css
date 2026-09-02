@@ -27,6 +27,11 @@
   --color-ev-xd: #d55181;
   --color-ev-team: #2f9b2f;
 
+  --color-side-a: #3987e5;
+  --color-side-a-soft: rgba(57, 135, 229, 0.14);
+  --color-side-b: #d95926;
+  --color-side-b-soft: rgba(217, 89, 38, 0.14);
+
   --animate-fade-up: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-marquee: marquee 32s linear infinite;
 

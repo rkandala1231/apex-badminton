@@ -60,20 +60,36 @@ These are safe to expose client-side (that's what the anon/publishable key is fo
 ```
 src/
   components/
-    sections/     Hero, Mission, Registration, Tournament, Formats, Analytics
+    sections/     HomeHero, Mission, Purpose, CoreValues, WhatWeDo, Impact,
+                   FounderMessage, ClosingCta, Registration, Tournament, Formats, Analytics
     charts/       TrendChart, BarChart, Bracket (all SVG, framer-motion entrances)
     admin/        AdminAuthForm, AdminDashboard
     ui/           Button, SectionHead, Reveal
-    Nav.tsx, Footer.tsx
+    Nav.tsx        hamburger-only nav (all breakpoints), Footer.tsx, PageShell.tsx
   pages/
-    Home.tsx       the public site (all sections)
-    Admin.tsx       auth-gated staff dashboard (lazy-loaded)
+    Home.tsx           Mission/Vision/Founder's Message + stats (the landing page)
+    Register.tsx        registration form — its own route
+    TournamentPage.tsx  schedule, venue, bracket diagram — its own route
+    FormatsPage.tsx      the six event formats — its own route
+    AnalyticsPage.tsx    live registration analytics — its own route
+    Admin.tsx            auth-gated staff dashboard (lazy-loaded)
   lib/
     supabase.ts    Supabase client
     queries.ts     react-query hooks (analytics, registration RPC, admin CRUD)
     useAuth.ts      auth state + is_admin check
     types.ts        shared types + event/region metadata
 ```
+
+## Site structure
+
+The site is now multi-page rather than a single long scroll. `/` is the landing page — built entirely
+around the Mission, Vision, Core Values, and Founder's Message from `APEX_Mission_Vision_Founders_Message.pdf`,
+plus a stats band (`HomeHero.tsx`) with illustrative membership/partnership numbers themed to that document
+(these are marketing stats, not pulled from the database — the live, database-backed numbers live on the
+`/analytics` page). Register, Tournament, Formats, and Analytics are each their own route, reachable only
+through the hamburger menu (shown at every screen size, not just mobile) — there's no longer a horizontal
+nav bar. Old `#registration` / `#tournament` / `#formats` / `#analytics` / `#mission` / `#admin` hash links
+from the previous single-page version auto-redirect to the new routes.
 
 ## Database contract (unchanged from the previous version)
 
