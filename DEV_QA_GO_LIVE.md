@@ -7,11 +7,13 @@ have either. Run these once; after that, every `git push` to `dev`/`qa`/`main` d
 ## 0. Push the branches
 
 This session couldn't push directly (`apex-badminton` isn't in its authorized repo set yet — if
-you add it, future rounds can skip this step). For now, apply the bundle sent alongside this file:
+you add it, future rounds can skip this step). `main` is already up to date on GitHub (PR #1 is
+merged) — the bundle only carries `dev`, `qa`, and the updated `feat/tournament-platform-sync`
+(which now also has the versioned migrations and this runbook). In a local clone of the real repo:
 
 ```bash
-git fetch /path/to/apex-tournament-platform-sync.bundle 'refs/heads/*:refs/heads/*'
-git push origin main dev qa
+git fetch /path/to/apex-dev-qa-go-live.bundle 'refs/heads/*:refs/heads/*'
+git push origin dev qa feat/tournament-platform-sync
 ```
 
 ## 1. Confirm the Dev/QA database is caught up
