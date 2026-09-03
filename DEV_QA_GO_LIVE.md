@@ -51,44 +51,59 @@ If you ever need to re-run any of this by hand (a fresh environment, a rollback)
 object) — still needs you, in the dashboard. Without it, anything pointed at QA gets a
 "schema not found" error.
 
-## 3. Create the two missing Vercel projects
+## 3. Create the one shared Dev+QA Vercel project (plus the separate prod one, if it doesn't exist yet)
+
+Dev and QA share **one** Vercel project, not two — matching that they already share one Supabase
+project (just a different schema). Both deploy as ordinary Preview deployments there; there's no
+`--prod` deploy for this project at all. Each branch gets pinned to its own stable `*.vercel.app`
+alias by the pipeline itself (step 4 below sets this up in `pipeline.yml`) rather than by Vercel's
+automatic per-branch URL — that automatic URL is a Git-Integration-only feature, and doesn't get
+assigned to a deployment pushed via CLI from a third-party CI runner like GitHub Actions (this
+pipeline). Confirmed against Vercel's own docs and community forum, not assumed.
 
 ```bash
-# Dev
 git clone https://github.com/rkandala1231/apex-badminton.git apex-badminton-dev
 cd apex-badminton-dev && git checkout dev
 cp .env.development .env      # already has real Dev Supabase creds
 npm install
 npx vercel login              # if not already logged in
-npx vercel                    # project name: apex-badminton-dev
-npx vercel env add VITE_SUPABASE_URL production
-npx vercel env add VITE_SUPABASE_ANON_KEY production
-npx vercel --prod             # one-time only — pushes to `dev` deploy automatically after this
+npx vercel                    # project name: apex-badminton-dev -- links the folder, no need to deploy yet
 
-# QA
-cd ..
-git clone https://github.com/rkandala1231/apex-badminton.git apex-badminton-qa
-cd apex-badminton-qa && git checkout qa
-cp .env.qa .env                # same Dev creds + VITE_SUPABASE_SCHEMA=qa
-npm install
-npx vercel                     # project name: apex-badminton-qa
-npx vercel env add VITE_SUPABASE_URL production
-npx vercel env add VITE_SUPABASE_ANON_KEY production
-npx vercel env add VITE_SUPABASE_SCHEMA production   # value: qa
-npx vercel --prod              # one-time only
+# Preview env vars -- these apply to BOTH the dev and qa branches by default
+npx vercel env add VITE_SUPABASE_URL preview
+npx vercel env add VITE_SUPABASE_ANON_KEY preview
+
+# qa-branch-only override: makes the qa branch's preview point at the `qa` schema instead of `public`.
+# This is a plain Vercel CLI feature (branch-scoped Preview env vars) -- no paid plan required.
+npx vercel env add VITE_SUPABASE_SCHEMA preview qa
+# when prompted for the value, enter: qa
+
+npx vercel deploy              # one-time preview deploy, just to confirm the project + env vars work
 ```
 
-Each `npx vercel` run prints a URL and writes `.vercel/project.json` — that's your Dev URL / QA URL,
-and where the `orgId`/`projectId` for the next step come from.
+`apex-badminton-qa.vercel.app` and `apex-badminton-dev.vercel.app` are the two aliases the pipeline
+will assign (see `pipeline.yml`'s `deploy` job) — they're on the shared `vercel.app` domain, claimed
+on a first-come basis, so if either is already taken by someone else's project, edit those two
+literal strings in `pipeline.yml` to a different pair of names before step 5.
+
+If the prod Vercel project doesn't already exist (this runbook assumes it does, since it predates
+this round of work), create it the same way against the `main` branch and prod Supabase creds, with
+a normal `npx vercel --prod` — prod is the one branch that still gets its own project and its own
+real production deploy.
+
+The `npx vercel` link step writes `.vercel/project.json` in the project folder — that's where the
+`orgId`/`projectId` for the next step come from.
 
 ## 4. Wire up the pipeline (GitHub Actions)
 
 1. **Get a token**: [vercel.com/account/tokens](https://vercel.com/account/tokens) → Create Token.
-2. **Get IDs**: open `.vercel/project.json` in each of the three project folders (dev, qa, and your
-   existing prod folder) → note `orgId` (same across all three) and `projectId` (different each).
+2. **Get IDs**: open `.vercel/project.json` in each of the two project folders (the shared dev+qa
+   folder, and your existing prod folder) → note `orgId` (same across both) and `projectId`
+   (different each).
 3. **GitHub repo → Settings → Secrets and variables → Actions → New repository secret**, add:
-   `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_DEV`, `VERCEL_PROJECT_ID_QA`,
-   `VERCEL_PROJECT_ID_PROD`.
+   `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_DEV_QA`, `VERCEL_PROJECT_ID_PROD`.
+   (Only two project-ID secrets now, since dev and qa share one project — `pipeline.yml` already
+   picks `--git-branch=dev` vs `--git-branch=qa` within it and aliases each to its own URL.)
 4. Optional but recommended: **Settings → Branches → Add rule** for `main` → require the
    `security` and `evals` checks to pass before merging.
 
@@ -96,14 +111,20 @@ and where the `orgId`/`projectId` for the next step come from.
 
 ```bash
 # in apex-badminton-dev, on branch `dev`
-git push                      # pipeline runs, deploys to your Dev URL
+git push                      # pipeline runs, deploys a Preview build, aliases it to
+                               # https://apex-badminton-dev.vercel.app
 
 # once it looks right:
-git fetch origin && git merge origin/dev && git push    # on qa branch -> deploys to QA URL
+git fetch origin && git merge origin/dev && git push    # on qa branch -> deploys + aliases to
+                                                          # https://apex-badminton-qa.vercel.app
 
 # once QA looks right:
-git fetch origin && git merge origin/qa && git push     # on main -> deploys to prod
+git fetch origin && git merge origin/qa && git push     # on main -> real --prod deploy
 ```
 
 Watch progress under the repo's **Actions** tab — each run shows security/evals/deploy as separate
-checks, with the live URL in the deploy job's summary once it ships.
+checks, with both the raw deployment URL and (for dev/qa) the stable alias URL in the deploy job's
+summary once it ships. The very first `dev` and `qa` pushes are what actually claim the two
+`*.vercel.app` aliases — if either name turns out to already be taken by someone else, that alias
+step in the Actions log will say so, and the fix is to change the two literal strings in
+`pipeline.yml`'s `deploy` job to different names and push again.

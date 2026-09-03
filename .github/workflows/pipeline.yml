@@ -6,14 +6,26 @@ name: Ship pipeline (security -> evals -> deploy)
 #   deploy    — only runs if both of the above pass; deploys to the environment matching the branch
 #
 # Branch -> environment mapping:
-#   dev  branch  -> apex-badminton-dev  Vercel project  (Dev Supabase project)
-#   qa   branch  -> apex-badminton-qa   Vercel project  (QA Supabase project)
-#   main branch  -> apexclubj           Vercel project  (Prod Supabase project)
+#   dev  branch  -> apex-badminton-dev Vercel project, Preview deployment
+#                   aliased to apex-badminton-dev.vercel.app   (Dev Supabase project, public schema)
+#   qa   branch  -> SAME apex-badminton-dev Vercel project, a separate Preview deployment
+#                   aliased to apex-badminton-qa.vercel.app    (same Dev Supabase project, qa schema --
+#                   VITE_SUPABASE_SCHEMA=qa is scoped to just the qa branch via
+#                   `vercel env add VITE_SUPABASE_SCHEMA preview qa`)
+#   main branch  -> apexclubj Vercel project, Production deployment (Prod Supabase project)
+#
+# dev and qa deliberately share one Vercel project instead of getting one each -- fewer projects to
+# create/wire up, matching that they already share one Supabase project (schema-only difference).
+# The cost: each of their deployments needs an explicit `vercel alias set` below. Vercel's automatic
+# per-branch URL (project-git-<branch>-team.vercel.app) only gets assigned by Vercel's own GitHub App
+# integration -- a CLI-driven deploy from a third-party CI runner (this pipeline) does not get one
+# for free, confirmed against Vercel's own docs and community forum rather than assumed, so this
+# pipeline assigns its own stable alias per branch instead of relying on that.
 #
 # On a pull request into dev/qa/main: security + evals run as required checks, nothing deploys.
 # On a push to dev/qa/main: security + evals run, then deploy runs automatically if both pass.
 #
-# See CI_CD.md for the one-time setup (GitHub secrets, branch protection).
+# See DEV_QA_GO_LIVE.md for the one-time setup (Vercel project, GitHub secrets, branch protection).
 
 on:
   push:
@@ -107,27 +119,49 @@ jobs:
         with:
           node-version: 20
 
-      - name: Resolve target Vercel project for this branch
+      - name: Resolve target Vercel project/environment for this branch
         id: target
         run: |
           case "${{ github.ref_name }}" in
-            main) echo "project_id=${{ secrets.VERCEL_PROJECT_ID_PROD }}" >> "$GITHUB_OUTPUT"; echo "env_name=production" >> "$GITHUB_OUTPUT" ;;
-            qa)   echo "project_id=${{ secrets.VERCEL_PROJECT_ID_QA }}"   >> "$GITHUB_OUTPUT"; echo "env_name=qa" >> "$GITHUB_OUTPUT" ;;
-            dev)  echo "project_id=${{ secrets.VERCEL_PROJECT_ID_DEV }}"  >> "$GITHUB_OUTPUT"; echo "env_name=development" >> "$GITHUB_OUTPUT" ;;
-            *)    echo "::error::No Vercel project mapped for branch ${{ github.ref_name }}"; exit 1 ;;
+            main)
+              echo "project_id=${{ secrets.VERCEL_PROJECT_ID_PROD }}" >> "$GITHUB_OUTPUT"
+              echo "env_name=production" >> "$GITHUB_OUTPUT"
+              echo "vercel_environment=production" >> "$GITHUB_OUTPUT"
+              echo "git_branch_flag=" >> "$GITHUB_OUTPUT"
+              echo "prod_flag=--prod" >> "$GITHUB_OUTPUT"
+              echo "alias=" >> "$GITHUB_OUTPUT"
+              ;;
+            qa)
+              echo "project_id=${{ secrets.VERCEL_PROJECT_ID_DEV_QA }}" >> "$GITHUB_OUTPUT"
+              echo "env_name=qa" >> "$GITHUB_OUTPUT"
+              echo "vercel_environment=preview" >> "$GITHUB_OUTPUT"
+              echo "git_branch_flag=--git-branch=qa" >> "$GITHUB_OUTPUT"
+              echo "prod_flag=" >> "$GITHUB_OUTPUT"
+              echo "alias=apex-badminton-qa.vercel.app" >> "$GITHUB_OUTPUT"
+              ;;
+            dev)
+              echo "project_id=${{ secrets.VERCEL_PROJECT_ID_DEV_QA }}" >> "$GITHUB_OUTPUT"
+              echo "env_name=development" >> "$GITHUB_OUTPUT"
+              echo "vercel_environment=preview" >> "$GITHUB_OUTPUT"
+              echo "git_branch_flag=--git-branch=dev" >> "$GITHUB_OUTPUT"
+              echo "prod_flag=" >> "$GITHUB_OUTPUT"
+              echo "alias=apex-badminton-dev.vercel.app" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::No Vercel project mapped for branch ${{ github.ref_name }}"; exit 1 ;;
           esac
 
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
       - name: Pull Vercel environment info (env vars come from the Vercel project, not GitHub secrets)
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=${{ steps.target.outputs.vercel_environment }} ${{ steps.target.outputs.git_branch_flag }} --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ steps.target.outputs.project_id }}
 
       - name: Build via Vercel
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel build ${{ steps.target.outputs.prod_flag }} --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ steps.target.outputs.project_id }}
@@ -135,9 +169,16 @@ jobs:
       - name: Deploy prebuilt output
         id: deploy
         run: |
-          url=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          url=$(vercel deploy --prebuilt ${{ steps.target.outputs.prod_flag }} --token=${{ secrets.VERCEL_TOKEN }})
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Deployed ${{ steps.target.outputs.env_name }} to: $url"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ steps.target.outputs.project_id }}
+
+      - name: Pin the stable alias for this branch (dev/qa only -- prod already has its own domain)
+        if: steps.target.outputs.alias != ''
+        run: vercel alias set "${{ steps.deploy.outputs.url }}" "${{ steps.target.outputs.alias }}" --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ steps.target.outputs.project_id }}
@@ -145,4 +186,7 @@ jobs:
       - name: Summary
         run: |
           echo "### Deployed \`${{ github.ref_name }}\` -> ${{ steps.target.outputs.env_name }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "${{ steps.deploy.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Deployment URL: ${{ steps.deploy.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "${{ steps.target.outputs.alias }}" ]; then
+            echo "Stable URL (bookmark this one): https://${{ steps.target.outputs.alias }}" >> "$GITHUB_STEP_SUMMARY"
+          fi

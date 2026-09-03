@@ -12,7 +12,8 @@ one job and each visible as its own check in GitHub:
    `/formats`, `/analytics`, `/admin`), failing the build on any crash, blank page, or uncaught JS
    error. This is the same manual QA pass I used to do by hand, now automatic on every push.
 3. **Deployment agent** (`deploy` job) — only runs if security and evals both pass. Looks at which
-   branch triggered the run, deploys to the matching Vercel project, and never touches the other two.
+   branch triggered the run, deploys to the matching Vercel project/environment, and never touches
+   the others.
 
 From here on, your workflow is: describe the idea to me (or write the code yourself), push to the
 right branch, and the pipeline does the rest. You'll see it running under your repo's **Actions**
@@ -20,11 +21,19 @@ tab, and each push gets a pass/fail summary with the live URL once deployed.
 
 ## Branch → environment map
 
-| Branch | Vercel project | Site |
-|---|---|---|
-| `dev` | `apex-badminton-dev` | your Dev URL |
-| `qa` | `apex-badminton-qa` | your QA URL (once QA is provisioned) |
-| `main` | `apexclubj` | `apexclubj.vercel.app` — the real, public site |
+| Branch | Vercel project | Deployment type | Site |
+|---|---|---|---|
+| `dev` | `apex-badminton-dev` | Preview (`--git-branch=dev`) | `apex-badminton-dev.vercel.app` |
+| `qa` | `apex-badminton-dev` (same project) | Preview (`--git-branch=qa`) | `apex-badminton-qa.vercel.app` |
+| `main` | `apexclubj` | Production | `apexclubj.vercel.app` — the real, public site |
+
+`dev` and `qa` deliberately share one Vercel project instead of getting one each — same idea as
+them already sharing one Supabase project, just a different schema per branch instead of a
+different database. Each still gets its own stable URL: the pipeline deploys a Preview build for
+that branch, then runs `vercel alias set` to pin it to that branch's fixed `*.vercel.app` name (see
+`pipeline.yml`'s `deploy` job) — Vercel's automatic per-branch preview URL only gets assigned by its
+own GitHub App integration, not by a CLI deploy from a third-party CI runner like this one, so the
+pipeline claims the alias itself instead of relying on that.
 
 Opening a **pull request** into any of these branches runs security + evals only (no deploy) — a
 gate to check before you merge. A direct **push** to the branch runs security + evals, then deploys.
@@ -33,9 +42,9 @@ gate to check before you merge. A direct **push** to the branch runs security + 
 
 The pipeline deploys into Vercel projects that must already exist and already have their Supabase
 env vars set — it doesn't create projects or set app secrets, it only builds and ships code. That
-one-time linking is exactly the `npx vercel` / `npx vercel env add` steps already in
-`ENVIRONMENTS.md`. Do that once per environment (Dev now, QA once its Supabase project exists);
-after that, you never run `npx vercel --prod` by hand again — pushing to the branch does it.
+one-time linking is exactly the `npx vercel` / `npx vercel env add` steps in `DEV_QA_GO_LIVE.md`.
+Do that once (one project for dev+qa together, one for prod); after that, you never run
+`npx vercel --prod` or `npx vercel deploy` by hand again — pushing to the branch does it.
 
 ### 1. Get a Vercel token
 
@@ -44,16 +53,16 @@ like `github-actions` → copy it. You'll paste it into GitHub as `VERCEL_TOKEN`
 
 ### 2. Get your Org ID and each Project ID
 
-In each project folder (`apex-badminton-dev`, `apex-badminton-qa`, and your existing prod folder),
-after running `npx vercel link` (or the first-time `npx vercel` setup), a file appears at
+In each of the two project folders (the shared dev+qa folder, and your existing prod folder), after
+running `npx vercel link` (or the first-time `npx vercel` setup), a file appears at
 `.vercel/project.json`:
 
 ```json
 { "orgId": "team_xxxxxxxx", "projectId": "prj_xxxxxxxx" }
 ```
 
-`orgId` is the same across all three (same Vercel account/team) — you only need it once.
-`projectId` is different for each of the three projects — grab all three.
+`orgId` is the same across both (same Vercel account/team) — you only need it once.
+`projectId` is different for each of the two projects — grab both.
 
 ### 3. Add the secrets to GitHub
 
@@ -63,13 +72,13 @@ In your GitHub repo: **Settings → Secrets and variables → Actions → New re
 |---|---|
 | `VERCEL_TOKEN` | the token from Step 1 |
 | `VERCEL_ORG_ID` | the `orgId` from Step 2 |
-| `VERCEL_PROJECT_ID_DEV` | `projectId` for `apex-badminton-dev` |
-| `VERCEL_PROJECT_ID_QA` | `projectId` for `apex-badminton-qa` (add once it exists) |
+| `VERCEL_PROJECT_ID_DEV_QA` | `projectId` for the shared `apex-badminton-dev` project |
 | `VERCEL_PROJECT_ID_PROD` | `projectId` for `apexclubj` |
 
 Notice there's no Supabase key here — `vercel pull` fetches `VITE_SUPABASE_URL` /
-`VITE_SUPABASE_ANON_KEY` directly from each Vercel project's own settings (the ones you already set
-with `npx vercel env add ... production`), so nothing sensitive needs to live in GitHub at all.
+`VITE_SUPABASE_ANON_KEY` (and, on the `qa` branch, `VITE_SUPABASE_SCHEMA`) directly from the Vercel
+project's own settings (the ones you already set with `npx vercel env add`), so nothing sensitive
+needs to live in GitHub at all.
 
 ### 4. Make the checks actually block bad merges (recommended)
 

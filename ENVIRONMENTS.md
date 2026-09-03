@@ -1,5 +1,11 @@
 # Apex Badminton — Dev / QA / Prod environments
 
+> **Superseded for the Vercel-project part:** Step 3 below (3 separate Vercel projects) was the
+> original plan; it changed the same way the Supabase side did — see `DEV_QA_GO_LIVE.md` for the
+> current, accurate steps (dev and qa now share **one** Vercel project, split by branch, each with
+> its own alias; only prod is separate). Everything else on this page (the database/schema history,
+> Steps 1, 2, and 5) is still accurate.
+
 ## Urgent — a live bug just got fixed, redeploy needed
 
 While setting up QA, I found and fixed a real bug affecting the **live, public** site: the earlier
