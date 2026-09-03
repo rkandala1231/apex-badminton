@@ -16,22 +16,40 @@ git fetch /path/to/apex-dev-qa-go-live.bundle 'refs/heads/*:refs/heads/*'
 git push origin dev qa feat/tournament-platform-sync
 ```
 
-## 1. Confirm the Dev/QA database is caught up
+## 1. Database — done, verified live against apex-badminton-dev
 
-The `qa` migration file (`supabase/migrations/qa-schema/20260902_qa_live_scoring_match_stats.sql`)
-was written **without live access** to `apex-badminton-dev` — verify its two assumptions before
-running it (the file's header has the exact check queries):
-- `qa.is_admin()` already exists (from the earlier Dev/QA setup work).
-- The `qa` schema itself already exists.
+Everything under `supabase/migrations/` (both `public`-schema files and the `qa-schema/`
+counterparts) has already been applied directly to `apex-badminton-dev`, including the admin
+role-tier/staff-management schema that turned out to also be missing (13 migrations behind prod,
+not just the 3 stats ones originally assumed). Verified with real sessions, not just "should work":
+`is_admin()`/`is_super_admin()` resolve correctly for a real JWT, `create_admin_account` →
+`list_admin_staff` → `remove_admin_access` round-tripped cleanly on both schemas, and
+`get_team_standings`/`get_head_to_head` returned correct aggregates for a real inserted-then-
+rolled-back match, as anon, on both `public` and `qa`. `get_advisors` on Dev now shows the same
+warnings as prod and nothing new.
 
-If both hold, run that file against `apex-badminton-dev` via the SQL editor. Then run the three
-files directly under `supabase/migrations/` (the `public`-schema versions) against
-`apex-badminton-dev` too, for the Dev environment itself.
+Two real bugs surfaced by that testing and got fixed (both now reflected in the migration files,
+so a fresh apply elsewhere won't hit them): `admins` on Dev was missing a `created_at` column
+entirely (not just `role`/`note` as first assumed) — `list_admin_staff()` needs it, added via
+`add column if not exists`. And `create_admin_account`'s `crypt()`/`gen_salt()` calls failed
+because pgcrypto lives in Dev's `extensions` schema, not `public` — fixed by schema-qualifying
+those calls explicitly rather than relying on search_path.
+
+**Two dev-only bootstrap super_admin accounts were created** — one on `public` (Dev), one on `qa`
+(QA), separate from each other and from anything in prod. Credentials were handed to you directly
+in chat, not committed anywhere in this repo. Use them to sign into each environment's admin
+console once its Vercel URL exists (Step 3), then use "Manage Admins" to add real staff and
+retire the bootstrap account if you want.
+
+If you ever need to re-run any of this by hand (a fresh environment, a rollback), everything in
+`supabase/migrations/` is idempotent — safe to re-apply.
 
 ## 2. Expose the `qa` schema
 
 `apex-badminton-dev` project → **Project Settings → API → Data API → Exposed schemas** → add `qa`
-→ Save. Without this, anything pointed at QA gets a "schema not found" error.
+→ Save. This one couldn't be done from SQL (it's a PostgREST/platform config, not a database
+object) — still needs you, in the dashboard. Without it, anything pointed at QA gets a
+"schema not found" error.
 
 ## 3. Create the two missing Vercel projects
 

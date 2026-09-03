@@ -8,8 +8,11 @@
 -- Supabase does not retain the SQL text of).
 --
 -- Written to be idempotent against a database that already has an older, single-tier `admins`
--- table (user_id, created_at only) -- as apex-badminton-dev does -- via `add column if not
--- exists` and `create table if not exists`, rather than assuming a from-scratch database.
+-- table -- as apex-badminton-dev does -- via `add column if not exists` and `create table if not
+-- exists`, rather than assuming a from-scratch database. Verified against apex-badminton-dev
+-- directly: dev's original `admins` table turned out to have only `user_id` (no `created_at`
+-- either, not just missing `role`/`note` as first assumed) -- `list_admin_staff()` in the
+-- companion RPCs file selects `created_at`, so it's added here too rather than assumed present.
 --
 -- Key final-state fact worth calling out: `admins` and `admin_allowlist` have RLS enabled but
 -- deliberately NO policies -- all access goes through the SECURITY DEFINER functions below, not
@@ -19,6 +22,7 @@
 
 alter table public.admins add column if not exists role text not null default 'admin';
 alter table public.admins add column if not exists note text;
+alter table public.admins add column if not exists created_at timestamptz not null default now();
 do $$ begin
   alter table public.admins add constraint admins_role_check check (role in ('admin', 'super_admin'));
 exception when duplicate_object then null;

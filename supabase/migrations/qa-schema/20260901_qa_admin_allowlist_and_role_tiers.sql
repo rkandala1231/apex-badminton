@@ -5,6 +5,7 @@
 
 alter table qa.admins add column if not exists role text not null default 'admin';
 alter table qa.admins add column if not exists note text;
+alter table qa.admins add column if not exists created_at timestamptz not null default now();
 do $$ begin
   alter table qa.admins add constraint admins_role_check check (role in ('admin', 'super_admin'));
 exception when duplicate_object then null;

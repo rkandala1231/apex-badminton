@@ -42,7 +42,7 @@ begin
     is_sso_user, is_anonymous
   ) values (
     '00000000-0000-0000-0000-000000000000', v_user_id, 'authenticated', 'authenticated',
-    v_email, crypt(p_password, gen_salt('bf')),
+    v_email, extensions.crypt(p_password, extensions.gen_salt('bf')),
     now(), jsonb_build_object('provider', 'email', 'providers', jsonb_build_array('email')),
     case when p_note is not null then jsonb_build_object('note', p_note) else '{}'::jsonb end,
     now(), now(),

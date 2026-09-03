@@ -9,6 +9,12 @@
 -- lock_down_staff_management_function_grants migrations into their final state. Written from
 -- live introspection of apex-badminton-prod.
 --
+-- pgcrypto's crypt()/gen_salt() are schema-qualified as `extensions.` rather than left bare:
+-- verified against apex-badminton-dev that pgcrypto lives in the `extensions` schema there (not
+-- `public`), so with this function's `search_path = 'public'`, the unqualified calls raised
+-- "function gen_salt(unknown) does not exist" the first time this was actually run. Qualifying
+-- explicitly works regardless of which schema pgcrypto happens to be installed in.
+--
 -- Deliberately NOT included: prod's actual admin accounts (apexadmin, and the staff renamed from
 -- admin1/2/3 to real names). This environment gets its own separate dev-only admin account,
 -- provisioned by a follow-up statement outside this file -- copying prod's real emails/password
@@ -54,7 +60,7 @@ begin
     is_sso_user, is_anonymous
   ) values (
     '00000000-0000-0000-0000-000000000000', v_user_id, 'authenticated', 'authenticated',
-    v_email, crypt(p_password, gen_salt('bf')),
+    v_email, extensions.crypt(p_password, extensions.gen_salt('bf')),
     now(), jsonb_build_object('provider', 'email', 'providers', jsonb_build_array('email')),
     case when p_note is not null then jsonb_build_object('note', p_note) else '{}'::jsonb end,
     now(), now(),
