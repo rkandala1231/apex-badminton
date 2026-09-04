@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { LIVE_MATCHES, COMPLETED_MATCHES } from '../../lib/matchCenterData';
+import { LIVE_MATCHES } from '../../lib/matchCenterData';
+import { CompletedMatches } from './CompletedMatches';
 import { EventStatistics } from './EventStatistics';
 import { SubTabs, EmptyState } from './shared';
 
@@ -33,12 +34,11 @@ export function ScoresSection() {
           <div className="mt-5 grid gap-3 sm:grid-cols-2">{/* live match cards render here */}</div>
         ))}
 
-      {tab === 'completed' &&
-        (COMPLETED_MATCHES.length === 0 ? (
-          <EmptyState className="mt-5" text="No completed matches yet." />
-        ) : (
-          <div className="mt-5">{/* completed matches table renders here */}</div>
-        ))}
+      {tab === 'completed' && (
+        <div className="mt-5">
+          <CompletedMatches />
+        </div>
+      )}
 
       {tab === 'stats' && <EventStatistics />}
     </div>

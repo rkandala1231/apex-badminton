@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
 import type {
   AdminRegistrationRow,
+  EventCode,
   EventCountRow,
   RegionCountRow,
   RegisterPayload,
@@ -61,6 +62,63 @@ export function useHeadToHead(collegeA: string | null, collegeB: string | null, 
     },
     enabled: !!collegeA && !!collegeB && collegeA !== collegeB,
     staleTime: 15_000,
+  });
+}
+
+export interface CompletedMatchGameRow {
+  game_index: number;
+  a_score: number;
+  b_score: number;
+  winner_side: 'A' | 'B' | null;
+}
+
+export interface CompletedMatchRow {
+  id: string;
+  event_code: EventCode;
+  stage: 'roundrobin' | 'knockout';
+  format: 'single' | 'bo3';
+  college_a: string;
+  college_b: string;
+  side_a_name: string;
+  side_b_name: string;
+  winner_side: 'A' | 'B' | null;
+  completed_at: string | null;
+  match_games: CompletedMatchGameRow[];
+}
+
+/**
+ * Finished matches for the public Completed Matches tab. `matches`/`match_games` are
+ * public-SELECT RLS tables (see live_scoring_match_stats_grants), so this reads them directly
+ * rather than through an RPC — same trust boundary the standings/head-to-head functions already
+ * rely on. Only `status = 'completed'` rows are returned; abandoned matches aren't real results.
+ */
+export function useCompletedMatches(eventCode: EventCode | null) {
+  return useQuery({
+    queryKey: ['completed-matches', eventCode],
+    queryFn: async (): Promise<CompletedMatchRow[]> => {
+      let query = supabase
+        .from('matches')
+        .select(
+          'id, event_code, stage, format, college_a, college_b, side_a_name, side_b_name, winner_side, completed_at, match_games(game_index, a_score, b_score, winner_side)'
+        )
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false });
+
+      if (eventCode) {
+        query = query.eq('event_code', eventCode);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      // Supabase doesn't guarantee ordering within an embedded relation — sort games client-side.
+      return ((data as CompletedMatchRow[]) || []).map((m) => ({
+        ...m,
+        match_games: [...m.match_games].sort((a, b) => a.game_index - b.game_index),
+      }));
+    },
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
   });
 }
 
