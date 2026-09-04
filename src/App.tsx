@@ -3,17 +3,41 @@ import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import { Home } from './pages/Home';
-import { Register } from './pages/Register';
-import { TournamentPage } from './pages/TournamentPage';
-import { FormatsPage } from './pages/FormatsPage';
-import { AnalyticsPage } from './pages/AnalyticsPage';
-import { MatchCenter } from './pages/MatchCenter';
-import { ScoresSection } from './components/matchcenter/ScoresSection';
-import { DrawsSection } from './components/matchcenter/DrawsSection';
-import { PlayersSection } from './components/matchcenter/PlayersSection';
-import { ScheduleSection } from './components/matchcenter/ScheduleSection';
-import { LiveStreamSection } from './components/matchcenter/LiveStreamSection';
 
+// Route-based code splitting: only Home (the landing page most visitors hit first) loads eagerly.
+// Everything else -- Register, Tournament, Formats, Analytics, the whole Match Center, and Admin --
+// is its own lazy chunk, so a visitor to `/` doesn't pay for code they'll never run. This is what
+// the "main JS bundle ~813 KB" punch-list item was flagging.
+const Register = lazy(() => import('./pages/Register').then((m) => ({ default: m.Register })));
+const TournamentPage = lazy(() =>
+  import('./pages/TournamentPage').then((m) => ({ default: m.TournamentPage }))
+);
+const FormatsPage = lazy(() =>
+  import('./pages/FormatsPage').then((m) => ({ default: m.FormatsPage }))
+);
+const AnalyticsPage = lazy(() =>
+  import('./pages/AnalyticsPage').then((m) => ({ default: m.AnalyticsPage }))
+);
+const MatchCenter = lazy(() =>
+  import('./pages/MatchCenter').then((m) => ({ default: m.MatchCenter }))
+);
+const ScoresSection = lazy(() =>
+  import('./components/matchcenter/ScoresSection').then((m) => ({ default: m.ScoresSection }))
+);
+const DrawsSection = lazy(() =>
+  import('./components/matchcenter/DrawsSection').then((m) => ({ default: m.DrawsSection }))
+);
+const PlayersSection = lazy(() =>
+  import('./components/matchcenter/PlayersSection').then((m) => ({ default: m.PlayersSection }))
+);
+const ScheduleSection = lazy(() =>
+  import('./components/matchcenter/ScheduleSection').then((m) => ({ default: m.ScheduleSection }))
+);
+const LiveStreamSection = lazy(() =>
+  import('./components/matchcenter/LiveStreamSection').then((m) => ({
+    default: m.LiveStreamSection,
+  }))
+);
 const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })));
 
 const LEGACY_HASH_ROUTES: Record<string, string> = {
@@ -51,28 +75,23 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <LegacyHashRedirect />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/tournament" element={<TournamentPage />} />
-          <Route path="/formats" element={<FormatsPage />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
-          <Route path="/match-center" element={<MatchCenter />}>
-            <Route path="scores" element={<ScoresSection />} />
-            <Route path="draws" element={<DrawsSection />} />
-            <Route path="players" element={<PlayersSection />} />
-            <Route path="schedule" element={<ScheduleSection />} />
-            <Route path="live-stream" element={<LiveStreamSection />} />
-          </Route>
-          <Route
-            path="/admin/*"
-            element={
-              <Suspense fallback={<div className="min-h-screen bg-bg" />}>
-                <Admin />
-              </Suspense>
-            }
-          />
-        </Routes>
+        <Suspense fallback={<div className="min-h-screen bg-bg" />}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/tournament" element={<TournamentPage />} />
+            <Route path="/formats" element={<FormatsPage />} />
+            <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/match-center" element={<MatchCenter />}>
+              <Route path="scores" element={<ScoresSection />} />
+              <Route path="draws" element={<DrawsSection />} />
+              <Route path="players" element={<PlayersSection />} />
+              <Route path="schedule" element={<ScheduleSection />} />
+              <Route path="live-stream" element={<LiveStreamSection />} />
+            </Route>
+            <Route path="/admin/*" element={<Admin />} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
       <Toaster
         theme="dark"
