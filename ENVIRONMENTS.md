@@ -1,12 +1,25 @@
 # Apex Badminton — Dev / Prod environments
 
-> **QA has been retired.** This project used to run a third `qa` branch/environment, sharing the
-> Dev Vercel project and Dev Supabase project (via a separate `qa` Postgres schema). That's gone
-> now — the `qa` branch's role in the pipeline, its Vercel alias, and its migration files have all
-> been removed from the codebase. What's left below is the manual cleanup on the Vercel/Supabase/
-> GitHub side, which this session can't reach directly (no dashboard login), plus the current,
-> accurate Dev/Prod-only setup. For the up-to-date one-time Vercel/GitHub setup, see
-> `DEV_GO_LIVE.md` (name kept for history; content now covers dev+prod only).
+> ## Policy: no QA, going forward
+>
+> **Only two environments exist: `dev` and `prod`.** There is no QA environment and none is
+> planned — all validation and testing happens in `dev` before a change is promoted to `prod`.
+> That means exactly **two** live URLs for this project, full stop:
+>
+> | Environment | Branch | URL |
+> |---|---|---|
+> | Dev | `dev` | `apex-badminton-dev.vercel.app` |
+> | Prod | `main` | `apexclubj.vercel.app` |
+>
+> A `qa` branch/environment (a third Vercel alias, sharing the Dev Vercel project and Dev Supabase
+> project via a separate `qa` Postgres schema) existed earlier and has been fully retired — its
+> role in the pipeline, its Vercel alias, and its migration files have all been removed from the
+> codebase. What's left below is the manual cleanup on the Vercel/Supabase/GitHub side, which this
+> session can't reach directly (no dashboard login). Don't recreate a `qa` branch, project, alias,
+> or schema without updating this file, `README.md`, and `.github/workflows/pipeline.yml`'s header
+> comment together — they're written assuming only these two environments exist. For the up-to-date
+> one-time Vercel/GitHub setup, see `DEV_GO_LIVE.md` (name kept for history; content now covers
+> dev+prod only).
 
 ## Manual cleanup — things you need to do that code changes can't reach
 

@@ -19,11 +19,12 @@ From here on, your workflow is: describe the idea to me (or write the code yours
 right branch, and the pipeline does the rest. You'll see it running under your repo's **Actions**
 tab, and each push gets a pass/fail summary with the live URL once deployed.
 
-> **QA retired.** This project used to have a third `qa` branch/environment sharing the `dev`
-> Vercel project via a separate Postgres schema. It's been removed — see `ENVIRONMENTS.md` for
-> what changed and the manual cleanup steps (Vercel alias, GitHub secret, Postgres schema) that
-> still need doing on the Vercel/Supabase/GitHub side, since this session can't reach those
-> dashboards directly.
+> **Policy: no QA, going forward.** Only two environments exist — `dev` and `prod` — and all
+> validation/testing happens in `dev` before promoting to `prod`. This project used to have a
+> third `qa` branch/environment sharing the `dev` Vercel project via a separate Postgres schema;
+> it's been fully removed. See `ENVIRONMENTS.md` for the policy detail and the manual cleanup
+> steps (Vercel alias, GitHub secret, Postgres schema) that still need doing on the
+> Vercel/Supabase/GitHub side, since this session can't reach those dashboards directly.
 
 ## Branch → environment map
 

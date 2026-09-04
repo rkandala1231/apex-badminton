@@ -13,6 +13,28 @@ The Apex tournament site, rebuilt as a React + TypeScript single-page app (Vite)
 - `framer-motion` — section reveals, chart entrances, mobile nav drawer
 - `sonner` — toast notifications
 
+## Environments — policy
+
+**Only two environments exist: `dev` and `prod`. There is no QA environment, and there will not be
+one going forward.** All validation and testing happens in `dev` before a change is promoted to
+`prod` — there is no separate QA stage in between. That means exactly **two** live URLs for this
+project:
+
+| Environment | Branch | URL |
+|---|---|---|
+| Dev | `dev` | `apex-badminton-dev.vercel.app` |
+| Prod | `main` | `apexclubj.vercel.app` — the real, public site |
+
+A `qa` branch/environment (a third Vercel alias, a separate Postgres schema) existed earlier and
+has been fully retired — see `ENVIRONMENTS.md` for what that involved and the one-time manual
+cleanup it still needs on the Vercel/Supabase/GitHub side. Don't recreate a `qa` branch, Vercel
+project, alias, or Supabase schema without updating this note and `ENVIRONMENTS.md` — the pipeline
+(`.github/workflows/pipeline.yml`) and `src/lib/supabase.ts` are both written assuming only these
+two environments exist.
+
+See `CI_CD.md` for how the pipeline promotes `dev` → `prod`, and `DEV_GO_LIVE.md` for one-time
+Vercel/GitHub setup.
+
 ## Local development
 
 ```bash

@@ -5,8 +5,14 @@ name: Ship pipeline (security -> evals -> deploy)
 #   evals     — typecheck, lint, build, and a Playwright smoke test across every route
 #   deploy    — only runs if both of the above pass; deploys to the environment matching the branch
 #
-# Branch -> environment mapping (QA retired -- see ENVIRONMENTS.md for the cleanup steps that
-# retired the `qa` branch/schema/Vercel alias that used to exist here):
+# POLICY: only two environments exist, dev and prod -- no QA, going forward or otherwise. All
+# validation and testing happens in dev (via the evals job above, plus manual checks against the
+# dev URL) before a change is promoted to prod. Exactly two live URLs come out of this pipeline;
+# see the table below. A `qa` branch/environment (its own Vercel alias + Postgres schema) existed
+# earlier and has been fully retired -- see ENVIRONMENTS.md for what that involved and README.md
+# for the project-level policy note. Don't reintroduce a `qa` case here without updating both.
+#
+# Branch -> environment mapping:
 #   dev  branch  -> apex-badminton-dev Vercel project, Preview deployment
 #                   aliased to apex-badminton-dev.vercel.app   (Dev Supabase project, public schema)
 #   main branch  -> apexclubj Vercel project, Production deployment (Prod Supabase project)
