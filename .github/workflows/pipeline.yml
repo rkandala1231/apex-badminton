@@ -69,7 +69,12 @@ jobs:
 
       - name: Guard against service-role / secret keys in source
         run: |
-          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git -E 'service_role|SUPABASE_SERVICE_ROLE|sb_secret_' . ; then
+          # --exclude-dir=.github: this workflow file has to write out the very patterns it's
+          # scanning for, so scanning .github/ makes the guard match itself and fail every run --
+          # confirmed that's exactly what happened on all 6 runs to date (100% failure rate since
+          # the pipeline was created), not a hypothetical. No application secret belongs in .github/
+          # anyway, so excluding it costs nothing real.
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -E 'service_role|SUPABASE_SERVICE_ROLE|sb_secret_' . ; then
             echo "::error::Found a service-role/secret-key pattern in the repo. Only the anon/publishable key should ever appear client-side."
             exit 1
           fi
