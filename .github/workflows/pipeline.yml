@@ -5,33 +5,29 @@ name: Ship pipeline (security -> evals -> deploy)
 #   evals     — typecheck, lint, build, and a Playwright smoke test across every route
 #   deploy    — only runs if both of the above pass; deploys to the environment matching the branch
 #
-# Branch -> environment mapping:
+# Branch -> environment mapping (QA retired -- see ENVIRONMENTS.md for the cleanup steps that
+# retired the `qa` branch/schema/Vercel alias that used to exist here):
 #   dev  branch  -> apex-badminton-dev Vercel project, Preview deployment
 #                   aliased to apex-badminton-dev.vercel.app   (Dev Supabase project, public schema)
-#   qa   branch  -> SAME apex-badminton-dev Vercel project, a separate Preview deployment
-#                   aliased to apex-badminton-qa.vercel.app    (same Dev Supabase project, qa schema --
-#                   VITE_SUPABASE_SCHEMA=qa is scoped to just the qa branch via
-#                   `vercel env add VITE_SUPABASE_SCHEMA preview qa`)
 #   main branch  -> apexclubj Vercel project, Production deployment (Prod Supabase project)
 #
-# dev and qa deliberately share one Vercel project instead of getting one each -- fewer projects to
-# create/wire up, matching that they already share one Supabase project (schema-only difference).
-# The cost: each of their deployments needs an explicit `vercel alias set` below. Vercel's automatic
-# per-branch URL (project-git-<branch>-team.vercel.app) only gets assigned by Vercel's own GitHub App
-# integration -- a CLI-driven deploy from a third-party CI runner (this pipeline) does not get one
-# for free, confirmed against Vercel's own docs and community forum rather than assumed, so this
-# pipeline assigns its own stable alias per branch instead of relying on that.
+# dev still gets an explicit `vercel alias set` below even though it's the only branch on its
+# project now, because Vercel's automatic per-branch URL (project-git-<branch>-team.vercel.app)
+# only gets assigned by Vercel's own GitHub App integration -- a CLI-driven deploy from a
+# third-party CI runner (this pipeline) does not get one for free, confirmed against Vercel's own
+# docs and community forum rather than assumed, so this pipeline assigns its own stable alias
+# instead of relying on that.
 #
-# On a pull request into dev/qa/main: security + evals run as required checks, nothing deploys.
-# On a push to dev/qa/main: security + evals run, then deploy runs automatically if both pass.
+# On a pull request into dev/main: security + evals run as required checks, nothing deploys.
+# On a push to dev/main: security + evals run, then deploy runs automatically if both pass.
 #
-# See DEV_QA_GO_LIVE.md for the one-time setup (Vercel project, GitHub secrets, branch protection).
+# See DEV_GO_LIVE.md for the one-time setup (Vercel project, GitHub secrets, branch protection).
 
 on:
   push:
-    branches: [dev, qa, main]
+    branches: [dev, main]
   pull_request:
-    branches: [dev, qa, main]
+    branches: [dev, main]
   workflow_dispatch: {}
 
 jobs:
@@ -61,8 +57,8 @@ jobs:
 
       - name: Guard against committed real env files
         run: |
-          if git ls-files | grep -E '^\.env(\.(development|production|qa))?$'; then
-            echo "::error::A real .env file is tracked in git. Only .env.example / .env.qa.example should ever be committed — real keys belong in Vercel's env vars, not the repo."
+          if git ls-files | grep -E '^\.env(\.(development|production))?$'; then
+            echo "::error::A real .env file is tracked in git. Only .env.example should ever be committed — real keys belong in Vercel's env vars, not the repo."
             exit 1
           fi
           echo "No real .env files are tracked. Good."
@@ -136,16 +132,8 @@ jobs:
               echo "prod_flag=--prod" >> "$GITHUB_OUTPUT"
               echo "alias=" >> "$GITHUB_OUTPUT"
               ;;
-            qa)
-              echo "project_id=${{ secrets.VERCEL_PROJECT_ID_DEV_QA }}" >> "$GITHUB_OUTPUT"
-              echo "env_name=qa" >> "$GITHUB_OUTPUT"
-              echo "vercel_environment=preview" >> "$GITHUB_OUTPUT"
-              echo "git_branch_flag=--git-branch=qa" >> "$GITHUB_OUTPUT"
-              echo "prod_flag=" >> "$GITHUB_OUTPUT"
-              echo "alias=apex-badminton-qa.vercel.app" >> "$GITHUB_OUTPUT"
-              ;;
             dev)
-              echo "project_id=${{ secrets.VERCEL_PROJECT_ID_DEV_QA }}" >> "$GITHUB_OUTPUT"
+              echo "project_id=${{ secrets.VERCEL_PROJECT_ID_DEV }}" >> "$GITHUB_OUTPUT"
               echo "env_name=development" >> "$GITHUB_OUTPUT"
               echo "vercel_environment=preview" >> "$GITHUB_OUTPUT"
               echo "git_branch_flag=--git-branch=dev" >> "$GITHUB_OUTPUT"
@@ -181,7 +169,7 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ steps.target.outputs.project_id }}
 
-      - name: Pin the stable alias for this branch (dev/qa only -- prod already has its own domain)
+      - name: Pin the stable alias for this branch (dev only -- prod already has its own domain)
         if: steps.target.outputs.alias != ''
         run: vercel alias set "${{ steps.deploy.outputs.url }}" "${{ steps.target.outputs.alias }}" --token=${{ secrets.VERCEL_TOKEN }}
         env:
