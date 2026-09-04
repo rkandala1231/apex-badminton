@@ -43,10 +43,10 @@ export function Footer() {
             <div>
               <h5 className="mono text-[0.7rem] tracking-[0.1em] uppercase text-text-muted mb-3 font-semibold">Contact</h5>
               <a
-                href="mailto:info@apexbadminton.example"
+                href="mailto:apexclubusa@gmail.com"
                 className="block no-underline text-text-secondary hover:text-accent text-[0.88rem] py-1.5"
               >
-                info@apexbadminton.example
+                apexclubusa@gmail.com
               </a>
               <span className="block text-text-secondary text-[0.88rem] py-1.5">New Jersey &amp; Beyond</span>
             </div>
