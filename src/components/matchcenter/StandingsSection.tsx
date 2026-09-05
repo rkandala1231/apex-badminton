@@ -42,54 +42,56 @@ export function StandingsSection() {
 
   return (
     <div>
-      <h1 className="text-[1.8rem] mb-1.5">Standings</h1>
-      <p className="text-[0.95rem] mb-2 max-w-[62ch]">
+      <h1 className="text-[1.5rem] sm:text-[1.8rem] mb-1 sm:mb-1.5">Standings</h1>
+      <p className="text-[0.86rem] sm:text-[0.95rem] mb-1.5 sm:mb-2 max-w-[62ch] leading-snug">
         Pool rankings for round-robin play, calculated live from completed match results using
         BWF-aligned tie-break rules.
       </p>
-      <p className="text-[0.78rem] text-text-muted mb-5 max-w-[62ch]">
+      <p className="text-[0.74rem] sm:text-[0.78rem] text-text-muted mb-4 sm:mb-5 max-w-[62ch] leading-snug">
         Draft or in-progress scores never affect this table — a result counts here only once it's
         published as completed. Ties that can't be resolved by the numeric criteria below are
         flagged for manual review rather than guessed.
       </p>
 
-      <div className="flex flex-wrap items-center gap-3 mb-5">
-        <select
-          value={eventCode}
-          onChange={(e) => {
-            setEventCode(e.target.value as EventCode);
-            setExplicitPoolId(null); // switching events invalidates whatever pool was picked
-          }}
-          className={selectCls}
-          aria-label="Event"
-        >
-          {EVENT_META.map((e) => (
-            <option key={e.code} value={e.code}>
-              {e.label}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={poolId}
-          onChange={(e) => setExplicitPoolId(e.target.value)}
-          className={selectCls}
-          disabled={!pools || pools.length === 0}
-          aria-label="Pool"
-        >
-          {!pools || pools.length === 0 ? (
-            <option value="">No pools yet</option>
-          ) : (
-            pools.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 mb-4 sm:mb-5">
+        <div className="grid grid-cols-2 gap-2 sm:contents">
+          <select
+            value={eventCode}
+            onChange={(e) => {
+              setEventCode(e.target.value as EventCode);
+              setExplicitPoolId(null); // switching events invalidates whatever pool was picked
+            }}
+            className={`${selectCls} w-full sm:w-auto`}
+            aria-label="Event"
+          >
+            {EVENT_META.map((e) => (
+              <option key={e.code} value={e.code}>
+                {e.label}
               </option>
-            ))
-          )}
-        </select>
+            ))}
+          </select>
+
+          <select
+            value={poolId}
+            onChange={(e) => setExplicitPoolId(e.target.value)}
+            className={`${selectCls} w-full sm:w-auto`}
+            disabled={!pools || pools.length === 0}
+            aria-label="Pool"
+          >
+            {!pools || pools.length === 0 ? (
+              <option value="">No pools yet</option>
+            ) : (
+              pools.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))
+            )}
+          </select>
+        </div>
 
         {standings && (
-          <div className="flex items-center gap-2 ml-auto text-[0.72rem] text-text-muted">
+          <div className="flex items-center gap-2 sm:ml-auto text-[0.72rem] text-text-muted">
             {standings.hasLiveMatches && (
               <span className="flex items-center gap-1.5 mono font-semibold uppercase tracking-wide text-accent">
                 <CircleDot className="w-3 h-3 animate-pulse" aria-hidden />
@@ -230,18 +232,24 @@ function RowMobile({
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left"
+        className="w-full flex flex-col gap-2 px-4 py-3 text-left"
       >
-        <RankBadge rank={r.rank} />
-        <div className="min-w-0 flex-1">
-          <div className="font-bold text-text-primary truncate">{r.entry.entry.entry_name}</div>
-          <div className="mono text-[0.68rem] uppercase tracking-wide text-text-muted truncate">{r.entry.entry.college}</div>
+        <div className="flex items-center gap-2.5">
+          <RankBadge rank={r.rank} />
+          <span className="font-bold text-text-primary flex-1 min-w-0 break-words leading-tight">{r.entry.entry.entry_name}</span>
+          {expanded ? (
+            <ChevronUp className="w-4 h-4 text-text-muted shrink-0" aria-hidden />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-text-muted shrink-0" aria-hidden />
+          )}
         </div>
-        <span className="mono text-[0.8rem] tabular-nums text-text-secondary shrink-0">
-          {r.entry.matchesWon}–{r.entry.matchesLost}
-        </span>
-        <StatusBadge status={r.status} compact />
-        {expanded ? <ChevronUp className="w-4 h-4 text-text-muted shrink-0" aria-hidden /> : <ChevronDown className="w-4 h-4 text-text-muted shrink-0" aria-hidden />}
+        <div className="flex items-center gap-2 pl-[1.9rem]">
+          <span className="mono text-[0.66rem] uppercase tracking-wide text-text-muted flex-1 min-w-0 truncate">{r.entry.entry.college}</span>
+          <span className="mono text-[0.8rem] tabular-nums text-text-secondary shrink-0">
+            {r.entry.matchesWon}–{r.entry.matchesLost}
+          </span>
+          <StatusBadge status={r.status} compact />
+        </div>
       </button>
       {expanded && (
         <div className="px-4 pb-3.5 grid grid-cols-3 gap-3 text-[0.75rem]">
@@ -323,15 +331,26 @@ function TeamStandingsTable({ data }: { data: TeamStandingsResult }) {
                 type="button"
                 onClick={() => setExpanded(isExpanded ? null : r.entry.college)}
                 aria-expanded={isExpanded}
-                className="w-full flex items-center gap-3 px-4 py-3 text-left"
+                className="w-full flex flex-col gap-2 px-4 py-3 text-left"
               >
-                <RankBadge rank={r.rank} />
-                <div className="min-w-0 flex-1 font-bold text-text-primary truncate">{r.entry.college}</div>
-                <span className="mono text-[0.8rem] tabular-nums text-text-secondary shrink-0">
-                  {r.entry.tiesWon}–{r.entry.tiesLost}
-                </span>
-                <StatusBadge status={r.status} compact />
-                {isExpanded ? <ChevronUp className="w-4 h-4 text-text-muted shrink-0" aria-hidden /> : <ChevronDown className="w-4 h-4 text-text-muted shrink-0" aria-hidden />}
+                <div className="flex items-center gap-2.5">
+                  <RankBadge rank={r.rank} />
+                  <span className="font-bold text-text-primary flex-1 min-w-0 break-words leading-tight">{r.entry.college}</span>
+                  {isExpanded ? (
+                    <ChevronUp className="w-4 h-4 text-text-muted shrink-0" aria-hidden />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-text-muted shrink-0" aria-hidden />
+                  )}
+                </div>
+                <div className="flex items-center gap-2 pl-[1.9rem]">
+                  <span className="mono text-[0.66rem] uppercase tracking-wide text-text-muted flex-1 min-w-0 truncate">
+                    Ties{r.entry.tiesPending > 0 ? ` · ${r.entry.tiesPending} pending` : ''}
+                  </span>
+                  <span className="mono text-[0.8rem] tabular-nums text-text-secondary shrink-0">
+                    {r.entry.tiesWon}–{r.entry.tiesLost}
+                  </span>
+                  <StatusBadge status={r.status} compact />
+                </div>
               </button>
               {isExpanded && (
                 <div className="px-4 pb-3.5 grid grid-cols-3 gap-3 text-[0.75rem]">
@@ -412,20 +431,26 @@ function StatusBadge({ status, compact }: { status: QualificationStatus; compact
 
 function Legend() {
   return (
-    <div className="mt-6 rounded-xl border border-border-soft bg-surface-1/60 px-4 py-3.5 text-[0.74rem] text-text-muted flex flex-wrap gap-x-5 gap-y-2">
-      <LegendItem swatch="var(--color-gold)" label="1st place" />
-      <LegendItem swatch="var(--color-silver)" label="2nd place" />
-      <LegendItem swatch="var(--color-bronze)" label="3rd place" />
+    <div className="mt-4 sm:mt-6 rounded-xl border border-border-soft bg-surface-1/60 px-4 py-3.5 text-[0.72rem] sm:text-[0.74rem] text-text-muted flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-2">
+      <div className="flex items-center gap-4">
+        <LegendItem swatch="var(--color-gold)" label="1st" />
+        <LegendItem swatch="var(--color-silver)" label="2nd" />
+        <LegendItem swatch="var(--color-bronze)" label="3rd" />
+      </div>
       <span className="flex items-center gap-1.5">
-        <span className="mono text-[0.68rem] font-semibold uppercase px-2 py-0.5 rounded-full border text-accent border-accent/40 bg-accent-soft">Q</span>
+        <span className="mono text-[0.68rem] font-semibold uppercase px-2 py-0.5 rounded-full border text-accent border-accent/40 bg-accent-soft shrink-0">
+          Q
+        </span>
         Qualified for the next round
       </span>
       <span className="flex items-center gap-1.5">
-        <AlertTriangle className="w-3.5 h-3.5 text-gold" aria-hidden />
-        Tie-break Required — decided by tournament officials, not shown automatically
+        <AlertTriangle className="w-3.5 h-3.5 text-gold shrink-0" aria-hidden />
+        Tie-break Required — decided by officials, not shown automatically
       </span>
-      <span className="border-t-2 border-accent/50 w-6 self-center" aria-hidden />
-      <span>marks the qualification cutoff line</span>
+      <span className="flex items-center gap-1.5">
+        <span className="border-t-2 border-accent/50 w-5 shrink-0" aria-hidden />
+        Marks the qualification cutoff line
+      </span>
     </div>
   );
 }
