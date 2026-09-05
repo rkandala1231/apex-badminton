@@ -10,6 +10,20 @@ import type {
   SummaryStats,
   WeeklyTrendRow,
 } from './types';
+import {
+  assignQualification,
+  isPoolComplete,
+  isTeamPoolComplete,
+  rankIndividualPool,
+  rankTeamPool,
+  type IndividualStats,
+  type MatchLike,
+  type PoolEntryLike,
+  type QualificationStatus,
+  type TeamStats,
+  type TeamTieLike,
+} from './standings/calc';
+import type { RankedEntry } from './standings/rank';
 
 export interface TeamStandingRow {
   college: string;
@@ -357,6 +371,152 @@ export function useCreatePlayerAssessment() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-assessments'] });
     },
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Standings (Match Center > Standings)
+// ---------------------------------------------------------------------------------------------
+
+export interface PoolRow {
+  id: string;
+  event_code: EventCode;
+  name: string;
+  qualifier_count: number;
+}
+
+/**
+ * Published pools for one event (or every event, when eventCode is null). `pools` is
+ * public-SELECT (see the standings schema migration) -- same trust boundary as matches -- so this
+ * is safe to call from the public Standings page with no auth check.
+ */
+export function usePools(eventCode: EventCode | null) {
+  return useQuery({
+    queryKey: ['pools', eventCode],
+    queryFn: async (): Promise<PoolRow[]> => {
+      let query = supabase
+        .from('pools')
+        .select('id, event_code, name, qualifier_count')
+        .eq('published', true)
+        .order('name', { ascending: true });
+      if (eventCode) query = query.eq('event_code', eventCode);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data as PoolRow[]) || [];
+    },
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+// Public-safe columns only -- no email/student ID anywhere on pool_entries or matches, so there's
+// nothing to filter out here (unlike, say, admin_registrations_view).
+const STANDINGS_MATCH_SELECT =
+  'id, pool_id, team_tie_id, college_a, college_b, side_a_name, side_b_name, winner_side, status, result_type, completed_at, match_games(a_score, b_score, winner_side)';
+
+type StandingsMatchRow = MatchLike & { completed_at: string | null };
+
+function latestCompletedAt(matches: { completed_at: string | null }[]): string | null {
+  const dates = matches.map((m) => m.completed_at).filter((d): d is string => !!d);
+  return dates.length ? dates.reduce((a, b) => (a > b ? a : b)) : null;
+}
+
+export interface IndividualStandingsResult {
+  kind: 'individual';
+  pool: PoolRow;
+  entries: (RankedEntry<IndividualStats> & { status: QualificationStatus })[];
+  poolComplete: boolean;
+  lastUpdated: string | null;
+  hasLiveMatches: boolean;
+}
+
+export interface TeamStandingsResult {
+  kind: 'team';
+  pool: PoolRow;
+  entries: (RankedEntry<TeamStats> & { status: QualificationStatus })[];
+  poolComplete: boolean;
+  lastUpdated: string | null;
+  hasLiveMatches: boolean;
+}
+
+export type PoolStandingsResult = IndividualStandingsResult | TeamStandingsResult;
+
+/**
+ * Fetches everything one pool needs and returns fully ranked, qualification-tagged standings --
+ * the UI just renders the result, it never re-derives ranking itself. Draft/unpublished results
+ * never reach here at all: only status = 'completed' matches feed calc.ts (see completedOnly in
+ * standings/calc.ts), so an in-progress live match can't move the public table.
+ */
+export function usePoolStandings(pool: PoolRow | null) {
+  return useQuery({
+    queryKey: ['pool-standings', pool?.id],
+    queryFn: async (): Promise<PoolStandingsResult | null> => {
+      if (!pool) return null;
+
+      if (pool.event_code === 'TEAM') {
+        const { data: tieData, error: tiesError } = await supabase
+          .from('team_ties')
+          .select('id, college_a, college_b, tie_label')
+          .eq('pool_id', pool.id);
+        if (tiesError) throw tiesError;
+        const ties = (tieData as TeamTieLike[]) || [];
+
+        let matches: StandingsMatchRow[] = [];
+        if (ties.length > 0) {
+          const { data, error } = await supabase
+            .from('matches')
+            .select(STANDINGS_MATCH_SELECT)
+            .in(
+              'team_tie_id',
+              ties.map((t) => t.id)
+            );
+          if (error) throw error;
+          matches = (data as StandingsMatchRow[]) || [];
+        }
+
+        const ranked = rankTeamPool(ties, matches);
+        const poolComplete = isTeamPoolComplete(ties, matches);
+        const entries = assignQualification(ranked, pool.qualifier_count, poolComplete);
+        return {
+          kind: 'team',
+          pool,
+          entries,
+          poolComplete,
+          lastUpdated: latestCompletedAt(matches),
+          hasLiveMatches: matches.some((m) => m.status === 'in_progress'),
+        };
+      }
+
+      const { data: entryData, error: entriesError } = await supabase
+        .from('pool_entries')
+        .select('id, entry_name, college')
+        .eq('pool_id', pool.id);
+      if (entriesError) throw entriesError;
+      const poolEntries = (entryData as PoolEntryLike[]) || [];
+
+      const { data, error } = await supabase.from('matches').select(STANDINGS_MATCH_SELECT).eq('pool_id', pool.id);
+      if (error) throw error;
+      const matches = (data as StandingsMatchRow[]) || [];
+
+      const ranked = rankIndividualPool(poolEntries, matches);
+      const poolComplete = isPoolComplete(
+        poolEntries.map((e) => e.entry_name),
+        matches
+      );
+      const entries = assignQualification(ranked, pool.qualifier_count, poolComplete);
+      return {
+        kind: 'individual',
+        pool,
+        entries,
+        poolComplete,
+        lastUpdated: latestCompletedAt(matches),
+        hasLiveMatches: matches.some((m) => m.status === 'in_progress'),
+      };
+    },
+    enabled: !!pool,
+    staleTime: 10_000,
+    refetchOnWindowFocus: true,
+    refetchInterval: 15_000, // standings should visibly update while someone's watching, same spirit as useLiveMatches
   });
 }
 

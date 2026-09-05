@@ -10,7 +10,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "smoke": "start-server-and-test preview http://localhost:4173 smoke:run",
-    "smoke:run": "node scripts/smoke-test.mjs http://localhost:4173"
+    "smoke:run": "node scripts/smoke-test.mjs http://localhost:4173",
+    "test:unit": "vitest run"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
@@ -38,6 +39,7 @@
     "start-server-and-test": "^3.0.12",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
-    "vite": "^8.2.2"
+    "vite": "^8.2.2",
+    "vitest": "^5.0.0"
   }
 }

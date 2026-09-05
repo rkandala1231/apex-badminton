@@ -4,6 +4,7 @@ import { PageShell } from '../components/PageShell';
 
 const SECTIONS = [
   { to: 'scores', label: 'Scores' },
+  { to: 'standings', label: 'Standings' },
   { to: 'draws', label: 'Draws' },
   { to: 'players', label: 'Players' },
   { to: 'schedule', label: 'Schedule' },

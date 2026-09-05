@@ -24,6 +24,9 @@ const MatchCenter = lazy(() =>
 const ScoresSection = lazy(() =>
   import('./components/matchcenter/ScoresSection').then((m) => ({ default: m.ScoresSection }))
 );
+const StandingsSection = lazy(() =>
+  import('./components/matchcenter/StandingsSection').then((m) => ({ default: m.StandingsSection }))
+);
 const DrawsSection = lazy(() =>
   import('./components/matchcenter/DrawsSection').then((m) => ({ default: m.DrawsSection }))
 );
@@ -84,6 +87,7 @@ export default function App() {
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/match-center" element={<MatchCenter />}>
               <Route path="scores" element={<ScoresSection />} />
+              <Route path="standings" element={<StandingsSection />} />
               <Route path="draws" element={<DrawsSection />} />
               <Route path="players" element={<PlayersSection />} />
               <Route path="schedule" element={<ScheduleSection />} />
