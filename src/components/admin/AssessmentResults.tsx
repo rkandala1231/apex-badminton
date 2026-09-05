@@ -51,7 +51,7 @@ export function AssessmentResults() {
   const levelData: BarDatum[] = useMemo(() => {
     const counts = new Map<string, number>();
     rows.forEach((r) => counts.set(r.suggested_level, (counts.get(r.suggested_level) || 0) + 1));
-    return SUGGESTED_LEVELS.map((l) => ({ code: l.slice(0, 4), label: l, value: counts.get(l) || 0, color: LEVEL_COLOR[l] }));
+    return SUGGESTED_LEVELS.map((l) => ({ code: l, label: l, value: counts.get(l) || 0, color: LEVEL_COLOR[l] }));
   }, [rows]);
 
   const decisionData: BarDatum[] = useMemo(() => {
