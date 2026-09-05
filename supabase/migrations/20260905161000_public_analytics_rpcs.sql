@@ -1,30 +1,22 @@
 -- ============================================================================
--- RECONSTRUCTION, NOT A VERIFIED COPY -- same caveat as
--- 20260905160000_registration_schema_and_rpc.sql, read that file's header first.
+-- VERIFIED against the real, live prod definitions -- not the guess this file started as.
 --
 -- `get_public_summary_stats`, `get_public_event_counts`, `get_public_region_counts`, and
 -- `get_public_weekly_trend` back the public /analytics page and have existed live on prod since
--- before this repo's migration history began. No migration file for any of them has ever existed
--- in this repo. Reconstructed from the exact shapes the frontend reads
--- (src/lib/types.ts: SummaryStats, EventCountRow, RegionCountRow, WeeklyTrendRow;
--- src/lib/queries.ts: fetchAnalytics) and the plausible aggregation each name implies -- NOT from
--- the real function bodies, which this session has no live access to introspect.
+-- before this repo's migration history began. No migration file for any of them had ever existed
+-- in this repo until now. All four bodies below are a verbatim transcription of
+-- `pg_get_functiondef(...)` run directly against prod by the user, not a guess.
 --
--- Before applying this anywhere real, pull the actual definitions first:
---   select pg_get_functiondef('public.get_public_summary_stats'::regproc);
---   select pg_get_functiondef('public.get_public_event_counts'::regproc);
---   select pg_get_functiondef('public.get_public_region_counts'::regproc);
---   select pg_get_functiondef('public.get_public_weekly_trend'::regproc);
--- and replace the bodies below with what those return. All four use `create or replace function`
--- -- applying this file as-is to an environment where the real versions already exist WILL
--- overwrite them with this reconstruction's aggregation logic, which may not exactly match
--- (e.g. "colleges_registered" could plausibly count total registration rows instead of distinct
--- college names on the real prod function -- this file assumes distinct, since a college
--- registering twice shouldn't inflate the headline count, but that's an assumption, not a fact
--- pulled from the real definition).
+-- Worth calling out since an earlier draft of this file guessed wrong on it: "colleges_registered"
+-- and "colleges" (in get_public_region_counts) both count `distinct r.id` -- i.e. distinct
+-- REGISTRATION ROWS, not distinct `college_name` values. If the same college ever submits two
+-- registration rows, both real functions count that as 2, not 1. That's the actual live behavior,
+-- preserved here even though "count distinct college_name" might sound like the more obviously
+-- correct interpretation of the column name -- don't "fix" this without confirming it's actually
+-- wrong to the app's owner first, since analytics history/comparisons would shift underneath it.
 --
--- Depends on 20260905160000_registration_schema_and_rpc.sql (the `registrations` table) already
--- being applied.
+-- Depends on 20260905160000_registration_schema_and_rpc.sql (the `registrations` and
+-- `registration_events` tables) already being applied.
 -- ============================================================================
 
 create or replace function public.get_public_summary_stats()
@@ -35,17 +27,16 @@ returns table (
   entries_this_week bigint
 )
 language sql
-stable
 security definer
-set search_path = 'public'
-as $$
-  select
-    count(distinct college_name)::bigint as colleges_registered,
-    coalesce(sum(coalesce(array_length(event_codes, 1), 0)), 0)::bigint as total_entries,
-    count(distinct college_name) filter (where created_at >= now() - interval '7 days')::bigint as colleges_this_week,
-    coalesce(sum(coalesce(array_length(event_codes, 1), 0)) filter (where created_at >= now() - interval '7 days'), 0)::bigint as entries_this_week
-  from public.registrations;
-$$;
+set search_path to 'public'
+as $function$
+  select count(distinct r.id) as colleges_registered,
+    count(e.id) as total_entries,
+    count(distinct r.id) filter (where r.created_at >= now() - interval '7 days') as colleges_this_week,
+    count(e.id) filter (where r.created_at >= now() - interval '7 days') as entries_this_week
+  from public.registrations r
+  left join public.registration_events e on e.registration_id = r.id;
+$function$;
 
 create or replace function public.get_public_event_counts()
 returns table (
@@ -53,16 +44,13 @@ returns table (
   entries bigint
 )
 language sql
-stable
 security definer
-set search_path = 'public'
-as $$
-  select ec.event_code, count(*)::bigint as entries
-  from public.registrations r
-  cross join lateral unnest(r.event_codes) as ec(event_code)
-  group by ec.event_code
-  order by entries desc, ec.event_code asc;
-$$;
+set search_path to 'public'
+as $function$
+  select e.event_code, count(*) as entries
+  from public.registration_events e
+  group by e.event_code;
+$function$;
 
 create or replace function public.get_public_region_counts()
 returns table (
@@ -70,15 +58,13 @@ returns table (
   colleges bigint
 )
 language sql
-stable
 security definer
-set search_path = 'public'
-as $$
-  select r.region, count(distinct r.college_name)::bigint as colleges
+set search_path to 'public'
+as $function$
+  select r.region, count(distinct r.id) as colleges
   from public.registrations r
-  group by r.region
-  order by colleges desc, r.region asc;
-$$;
+  group by r.region;
+$function$;
 
 create or replace function public.get_public_weekly_trend()
 returns table (
@@ -87,25 +73,21 @@ returns table (
   cumulative bigint
 )
 language sql
-stable
 security definer
-set search_path = 'public'
-as $$
-  with weekly as (
-    select date_trunc('week', created_at)::date as week_start, count(*)::bigint as new_regs
-    from public.registrations
+set search_path to 'public'
+as $function$
+  with weeks as (
+    select date_trunc('week', r.created_at)::date as week_start, count(*) as new_regs
+    from public.registrations r
     group by 1
   )
-  select
-    week_start,
-    new_regs,
-    sum(new_regs) over (order by week_start)::bigint as cumulative
-  from weekly
+  select week_start, new_regs, sum(new_regs) over (order by week_start) as cumulative
+  from weeks
   order by week_start;
-$$;
+$function$;
 
--- Public, read-only, no PII (no captain name/email/notes -- those stay behind
--- admin_registrations_view) -- same trust boundary as get_team_standings/get_head_to_head.
+-- Public, read-only, no PII (no captain name/email -- those stay behind admin_registrations_view)
+-- -- same trust boundary as get_team_standings/get_head_to_head.
 revoke execute on function public.get_public_summary_stats() from public;
 revoke execute on function public.get_public_event_counts() from public;
 revoke execute on function public.get_public_region_counts() from public;
