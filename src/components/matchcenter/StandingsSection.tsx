@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, CircleDot, Trophy } from 'lucide-react';
+import { AlertTriangle, CircleDot, Trophy } from 'lucide-react';
 import {
   usePoolStandings,
   usePools,
@@ -7,8 +7,7 @@ import {
   type PoolRow,
   type TeamStandingsResult,
 } from '../../lib/queries';
-import type { IndividualStats, QualificationStatus } from '../../lib/standings/calc';
-import type { RankedEntry } from '../../lib/standings/rank';
+import type { QualificationStatus } from '../../lib/standings/calc';
 import { EVENT_META, type EventCode } from '../../lib/types';
 import { EmptyState } from './shared';
 
@@ -137,21 +136,23 @@ export function StandingsSection() {
 // ---------------------------------------------------------------------------------------------
 // Individual / pair pools
 // ---------------------------------------------------------------------------------------------
+//
+// One real <table> at every screen size -- no separate mobile card list. Mobile-first sizing
+// (small type/padding by default, roomier from `sm:` up) keeps it usable on a phone; if a very
+// narrow screen still can't fit every column, the wrapper scrolls horizontally rather than the
+// page ever hiding data or wrapping the layout into something else.
 
 function IndividualStandingsTable({ data }: { data: IndividualStandingsResult }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
-
   if (data.entries.length === 0) {
     return <EmptyState text="No entries in this pool yet." />;
   }
 
   return (
     <div className="bg-surface-1 border border-border rounded-2xl overflow-hidden">
-      {/* Desktop / tablet: full table, all columns, no scroll needed at normal widths. */}
-      <div className="hidden sm:block overflow-x-auto">
-        <table className="w-full text-[0.84rem]">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] text-[0.76rem] sm:text-[0.84rem]">
           <thead>
-            <tr className="text-left text-text-muted text-[0.68rem] uppercase tracking-wide border-b border-border">
+            <tr className="text-left text-text-muted text-[0.62rem] sm:text-[0.68rem] uppercase tracking-wide border-b border-border">
               <Th>Rank</Th>
               <Th>Player / Pair</Th>
               <Th>College</Th>
@@ -164,101 +165,39 @@ function IndividualStandingsTable({ data }: { data: IndividualStandingsResult })
           </thead>
           <tbody>
             {data.entries.map((r, i) => (
-              <RowDesktop key={r.entry.entry.id} r={r} isCutoff={data.poolComplete && i === data.pool.qualifier_count - 1} />
+              <tr
+                key={r.entry.entry.id}
+                className={`border-b border-border-soft last:border-0 ${data.poolComplete && i === data.pool.qualifier_count - 1 ? 'border-b-2 border-b-accent/50' : ''}`}
+              >
+                <Td>
+                  <RankBadge rank={r.rank} />
+                </Td>
+                <Td>
+                  <span className="font-bold text-text-primary">{r.entry.entry.entry_name}</span>
+                </Td>
+                <Td className="mono text-[0.68rem] sm:text-[0.72rem] uppercase tracking-wide text-text-muted">
+                  {r.entry.entry.college}
+                </Td>
+                <Td align="right" className="mono tabular-nums">
+                  {r.entry.matchesPlayed}
+                </Td>
+                <Td align="right" className="mono tabular-nums">
+                  {r.entry.matchesWon}–{r.entry.matchesLost}
+                </Td>
+                <Td align="right" className="mono tabular-nums">
+                  {formatDiff(r.entry.gamesWon - r.entry.gamesLost)}
+                </Td>
+                <Td align="right" className="mono tabular-nums">
+                  {formatDiff(r.entry.rallyFor - r.entry.rallyAgainst)}
+                </Td>
+                <Td>
+                  <StatusBadge status={r.status} />
+                </Td>
+              </tr>
             ))}
           </tbody>
         </table>
       </div>
-
-      {/* Mobile: condensed columns with the rest revealed by tapping the row. */}
-      <div className="sm:hidden divide-y divide-border-soft">
-        {data.entries.map((r, i) => (
-          <RowMobile
-            key={r.entry.entry.id}
-            r={r}
-            isCutoff={data.poolComplete && i === data.pool.qualifier_count - 1}
-            expanded={expanded === r.entry.entry.id}
-            onToggle={() => setExpanded(expanded === r.entry.entry.id ? null : r.entry.entry.id)}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function RowDesktop({ r, isCutoff }: { r: RankedEntry<IndividualStats> & { status: QualificationStatus }; isCutoff: boolean }) {
-  return (
-    <tr className={`border-b border-border-soft last:border-0 ${isCutoff ? 'border-b-2 border-b-accent/50' : ''}`}>
-      <Td>
-        <RankBadge rank={r.rank} />
-      </Td>
-      <Td>
-        <span className="font-bold text-text-primary">{r.entry.entry.entry_name}</span>
-      </Td>
-      <Td className="mono text-[0.72rem] uppercase tracking-wide text-text-muted">{r.entry.entry.college}</Td>
-      <Td align="right" className="mono tabular-nums">
-        {r.entry.matchesPlayed}
-      </Td>
-      <Td align="right" className="mono tabular-nums">
-        {r.entry.matchesWon}–{r.entry.matchesLost}
-      </Td>
-      <Td align="right" className="mono tabular-nums">
-        {formatDiff(r.entry.gamesWon - r.entry.gamesLost)}
-      </Td>
-      <Td align="right" className="mono tabular-nums">
-        {formatDiff(r.entry.rallyFor - r.entry.rallyAgainst)}
-      </Td>
-      <Td>
-        <StatusBadge status={r.status} />
-      </Td>
-    </tr>
-  );
-}
-
-function RowMobile({
-  r,
-  isCutoff,
-  expanded,
-  onToggle,
-}: {
-  r: RankedEntry<IndividualStats> & { status: QualificationStatus };
-  isCutoff: boolean;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <div className={isCutoff ? 'border-b-2 border-b-accent/50' : ''}>
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={expanded}
-        className="w-full flex flex-col gap-2 px-4 py-3 text-left"
-      >
-        <div className="flex items-center gap-2.5">
-          <RankBadge rank={r.rank} />
-          <span className="font-bold text-text-primary flex-1 min-w-0 break-words leading-tight">{r.entry.entry.entry_name}</span>
-          {expanded ? (
-            <ChevronUp className="w-4 h-4 text-text-muted shrink-0" aria-hidden />
-          ) : (
-            <ChevronDown className="w-4 h-4 text-text-muted shrink-0" aria-hidden />
-          )}
-        </div>
-        <div className="flex items-center gap-2 pl-[1.9rem]">
-          <span className="mono text-[0.66rem] uppercase tracking-wide text-text-muted flex-1 min-w-0 truncate">{r.entry.entry.college}</span>
-          <span className="mono text-[0.8rem] tabular-nums text-text-secondary shrink-0">
-            {r.entry.matchesWon}–{r.entry.matchesLost}
-          </span>
-          <StatusBadge status={r.status} compact />
-        </div>
-      </button>
-      {expanded && (
-        <div className="px-4 pb-3.5 grid grid-cols-3 gap-3 text-[0.75rem]">
-          <DetailStat label="Played" value={String(r.entry.matchesPlayed)} />
-          <DetailStat label="Game diff" value={formatDiff(r.entry.gamesWon - r.entry.gamesLost)} />
-          <DetailStat label="Rally diff" value={formatDiff(r.entry.rallyFor - r.entry.rallyAgainst)} />
-          <div className="col-span-3 text-text-muted">Decided by: {r.decidedBy}</div>
-        </div>
-      )}
     </div>
   );
 }
@@ -268,18 +207,16 @@ function RowMobile({
 // ---------------------------------------------------------------------------------------------
 
 function TeamStandingsTable({ data }: { data: TeamStandingsResult }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
-
   if (data.entries.length === 0) {
     return <EmptyState text="No colleges in this pool yet." />;
   }
 
   return (
     <div className="bg-surface-1 border border-border rounded-2xl overflow-hidden">
-      <div className="hidden sm:block overflow-x-auto">
-        <table className="w-full text-[0.84rem]">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[520px] text-[0.76rem] sm:text-[0.84rem]">
           <thead>
-            <tr className="text-left text-text-muted text-[0.68rem] uppercase tracking-wide border-b border-border">
+            <tr className="text-left text-text-muted text-[0.62rem] sm:text-[0.68rem] uppercase tracking-wide border-b border-border">
               <Th>Rank</Th>
               <Th>College</Th>
               <Th align="right">Ties</Th>
@@ -320,53 +257,6 @@ function TeamStandingsTable({ data }: { data: TeamStandingsResult }) {
           </tbody>
         </table>
       </div>
-
-      <div className="sm:hidden divide-y divide-border-soft">
-        {data.entries.map((r, i) => {
-          const isExpanded = expanded === r.entry.college;
-          const isCutoff = data.poolComplete && i === data.pool.qualifier_count - 1;
-          return (
-            <div key={r.entry.college} className={isCutoff ? 'border-b-2 border-b-accent/50' : ''}>
-              <button
-                type="button"
-                onClick={() => setExpanded(isExpanded ? null : r.entry.college)}
-                aria-expanded={isExpanded}
-                className="w-full flex flex-col gap-2 px-4 py-3 text-left"
-              >
-                <div className="flex items-center gap-2.5">
-                  <RankBadge rank={r.rank} />
-                  <span className="font-bold text-text-primary flex-1 min-w-0 break-words leading-tight">{r.entry.college}</span>
-                  {isExpanded ? (
-                    <ChevronUp className="w-4 h-4 text-text-muted shrink-0" aria-hidden />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-text-muted shrink-0" aria-hidden />
-                  )}
-                </div>
-                <div className="flex items-center gap-2 pl-[1.9rem]">
-                  <span className="mono text-[0.66rem] uppercase tracking-wide text-text-muted flex-1 min-w-0 truncate">
-                    Ties{r.entry.tiesPending > 0 ? ` · ${r.entry.tiesPending} pending` : ''}
-                  </span>
-                  <span className="mono text-[0.8rem] tabular-nums text-text-secondary shrink-0">
-                    {r.entry.tiesWon}–{r.entry.tiesLost}
-                  </span>
-                  <StatusBadge status={r.status} compact />
-                </div>
-              </button>
-              {isExpanded && (
-                <div className="px-4 pb-3.5 grid grid-cols-3 gap-3 text-[0.75rem]">
-                  <DetailStat label="Matches" value={`${r.entry.matchesWon}–${r.entry.matchesLost}`} />
-                  <DetailStat label="Game diff" value={formatDiff(r.entry.gamesWon - r.entry.gamesLost)} />
-                  <DetailStat label="Rally diff" value={formatDiff(r.entry.rallyFor - r.entry.rallyAgainst)} />
-                  {r.entry.tiesPending > 0 && (
-                    <div className="col-span-3 text-text-muted">{r.entry.tiesPending} tie(s) still in progress</div>
-                  )}
-                  <div className="col-span-3 text-text-muted">Decided by: {r.decidedBy}</div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }
@@ -376,20 +266,11 @@ function TeamStandingsTable({ data }: { data: TeamStandingsResult }) {
 // ---------------------------------------------------------------------------------------------
 
 function Th({ children, align = 'left' }: { children: React.ReactNode; align?: 'left' | 'right' }) {
-  return <th className={`px-4 py-2.5 font-semibold ${align === 'right' ? 'text-right' : 'text-left'}`}>{children}</th>;
+  return <th className={`px-2.5 py-2 sm:px-4 sm:py-2.5 font-semibold ${align === 'right' ? 'text-right' : 'text-left'}`}>{children}</th>;
 }
 
 function Td({ children, align = 'left', className = '' }: { children: React.ReactNode; align?: 'left' | 'right'; className?: string }) {
-  return <td className={`px-4 py-3 ${align === 'right' ? 'text-right' : 'text-left'} ${className}`}>{children}</td>;
-}
-
-function DetailStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-text-muted text-[0.68rem] uppercase tracking-wide">{label}</div>
-      <div className="mono tabular-nums text-text-primary font-semibold">{value}</div>
-    </div>
-  );
+  return <td className={`px-2.5 py-2.5 sm:px-4 sm:py-3 ${align === 'right' ? 'text-right' : 'text-left'} ${className}`}>{children}</td>;
 }
 
 function formatDiff(n: number): string {
@@ -417,14 +298,14 @@ const STATUS_STYLE: Record<QualificationStatus, { text: string; className: strin
   },
 };
 
-function StatusBadge({ status, compact }: { status: QualificationStatus; compact?: boolean }) {
+function StatusBadge({ status }: { status: QualificationStatus }) {
   const s = STATUS_STYLE[status];
   return (
     <span
-      className={`inline-flex items-center gap-1 mono text-[0.68rem] font-semibold uppercase tracking-wide px-2 py-1 rounded-full border shrink-0 ${s.className}`}
+      className={`inline-flex items-center gap-1 mono text-[0.62rem] sm:text-[0.68rem] font-semibold uppercase tracking-wide px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full border whitespace-nowrap ${s.className}`}
     >
       {s.icon}
-      {compact && status === 'In Contention' ? '—' : s.text}
+      {s.text}
     </span>
   );
 }
