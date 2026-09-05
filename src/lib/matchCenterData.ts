@@ -52,14 +52,5 @@ export const DRAWS: Record<EventCode, DrawMatch[]> = {
   XD: [],
 };
 
-export interface LiveMatch {
-  event: EventCode | 'TEAM';
-  a: string;
-  aScore: number;
-  b: string;
-  bScore: number;
-  court: string;
-}
-
-export const LIVE_MATCHES: LiveMatch[] = [];
-export const COMPLETED_MATCHES: LiveMatch[] = [];
+// Live and completed matches now come from Supabase (see src/lib/queries.ts:
+// useLiveMatches / useCompletedMatches) instead of a static placeholder here.

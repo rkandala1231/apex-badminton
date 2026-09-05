@@ -65,14 +65,14 @@ export function useHeadToHead(collegeA: string | null, collegeB: string | null, 
   });
 }
 
-export interface CompletedMatchGameRow {
+export interface MatchGameRow {
   game_index: number;
   a_score: number;
   b_score: number;
   winner_side: 'A' | 'B' | null;
 }
 
-export interface CompletedMatchRow {
+export interface MatchRow {
   id: string;
   event_code: EventCode;
   stage: 'roundrobin' | 'knockout';
@@ -83,7 +83,22 @@ export interface CompletedMatchRow {
   side_b_name: string;
   winner_side: 'A' | 'B' | null;
   completed_at: string | null;
-  match_games: CompletedMatchGameRow[];
+  match_games: MatchGameRow[];
+}
+
+/** Back-compat aliases — CompletedMatches.tsx was written against these names. */
+export type CompletedMatchGameRow = MatchGameRow;
+export type CompletedMatchRow = MatchRow;
+
+const MATCH_SELECT =
+  'id, event_code, stage, format, college_a, college_b, side_a_name, side_b_name, winner_side, completed_at, match_games(game_index, a_score, b_score, winner_side)';
+
+/** Supabase doesn't guarantee ordering within an embedded relation — sort games client-side. */
+function sortGames(rows: MatchRow[]): MatchRow[] {
+  return rows.map((m) => ({
+    ...m,
+    match_games: [...m.match_games].sort((a, b) => a.game_index - b.game_index),
+  }));
 }
 
 /**
@@ -95,12 +110,10 @@ export interface CompletedMatchRow {
 export function useCompletedMatches(eventCode: EventCode | null) {
   return useQuery({
     queryKey: ['completed-matches', eventCode],
-    queryFn: async (): Promise<CompletedMatchRow[]> => {
+    queryFn: async (): Promise<MatchRow[]> => {
       let query = supabase
         .from('matches')
-        .select(
-          'id, event_code, stage, format, college_a, college_b, side_a_name, side_b_name, winner_side, completed_at, match_games(game_index, a_score, b_score, winner_side)'
-        )
+        .select(MATCH_SELECT)
         .eq('status', 'completed')
         .order('completed_at', { ascending: false });
 
@@ -110,14 +123,40 @@ export function useCompletedMatches(eventCode: EventCode | null) {
 
       const { data, error } = await query;
       if (error) throw error;
-
-      // Supabase doesn't guarantee ordering within an embedded relation — sort games client-side.
-      return ((data as CompletedMatchRow[]) || []).map((m) => ({
-        ...m,
-        match_games: [...m.match_games].sort((a, b) => a.game_index - b.game_index),
-      }));
+      return sortGames((data as MatchRow[]) || []);
     },
     staleTime: 15_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+/**
+ * Matches currently being scored. Same `matches`/`match_games` tables as Completed Matches, just
+ * filtered to `status = 'in_progress'` instead -- a match can only ever match one of the two
+ * queries at a time, and `finishLiveMatch` (matchStats.ts) is what flips it from one to the
+ * other. Polls on a short interval since this is the one Match Center tab meant to visibly
+ * update while someone's looking at it, without adding a Realtime subscription.
+ */
+export function useLiveMatches(eventCode: EventCode | null) {
+  return useQuery({
+    queryKey: ['live-matches', eventCode],
+    queryFn: async (): Promise<MatchRow[]> => {
+      let query = supabase
+        .from('matches')
+        .select(MATCH_SELECT)
+        .eq('status', 'in_progress')
+        .order('created_at', { ascending: false });
+
+      if (eventCode) {
+        query = query.eq('event_code', eventCode);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return sortGames((data as MatchRow[]) || []);
+    },
+    staleTime: 0,
+    refetchInterval: 4000,
     refetchOnWindowFocus: true,
   });
 }

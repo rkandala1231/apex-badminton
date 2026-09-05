@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { LIVE_MATCHES } from '../../lib/matchCenterData';
 import { CompletedMatches } from './CompletedMatches';
 import { EventStatistics } from './EventStatistics';
-import { SubTabs, EmptyState } from './shared';
+import { LiveMatches } from './LiveMatches';
+import { SubTabs } from './shared';
 
 type Tab = 'live' | 'completed' | 'stats';
 
@@ -27,12 +27,11 @@ export function ScoresSection() {
         onChange={(id) => setTab(id as Tab)}
       />
 
-      {tab === 'live' &&
-        (LIVE_MATCHES.length === 0 ? (
-          <EmptyState className="mt-5" text="No matches are live right now. Scores will update here in real time once play begins." />
-        ) : (
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">{/* live match cards render here */}</div>
-        ))}
+      {tab === 'live' && (
+        <div className="mt-5">
+          <LiveMatches />
+        </div>
+      )}
 
       {tab === 'completed' && (
         <div className="mt-5">

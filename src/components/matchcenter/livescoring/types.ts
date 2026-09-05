@@ -34,6 +34,14 @@ export interface MatchState {
   server: Side;
   matchWinner: Side | null;
   log: LogEntry[];
+  /**
+   * The Supabase `matches.id` for this match once `startLiveMatch` succeeds, null until then (or
+   * forever, if that call failed -- e.g. offline court-side wifi). Drives whether live scoring
+   * syncs progress as it happens (id present) or only saves once at the end (id null, the
+   * pre-Live-Scores fallback). Persisted to localStorage with the rest of MatchState so a page
+   * reload mid-match resumes syncing to the same row instead of creating a duplicate.
+   */
+  matchId: string | null;
 }
 
 export interface StartSetup {

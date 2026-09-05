@@ -26,9 +26,9 @@ export function LiveScoringSection() {
       <h1 className="text-[1.8rem] mb-1.5">Live Scoring</h1>
       <p className="text-[0.95rem] mb-5 max-w-[60ch]">
         Court-side scorekeeping for tournament staff — BWF-style rally-point scoring, scaled to a
-        15-point game. Scoring itself always works from this device, even offline; the result
-        syncs to the server automatically once a match finishes (or is ended early), powering
-        team and player stats.
+        15-point game. Scoring itself always works from this device, even offline; the score
+        syncs to the server as you go, live on the public Match Center, and the match moves to
+        Completed Matches the moment it finishes (or is ended early).
       </p>
 
       {state.started ? (
