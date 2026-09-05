@@ -297,6 +297,66 @@ export function useRemoveAdminAccess() {
   });
 }
 
+export type SuggestedLevel = 'Beginner' | 'Intermediate' | 'Advanced' | 'Competitive';
+export type FinalDecision = 'Advance' | 'Hold' | 'Reassess';
+
+export interface PlayerAssessmentRow {
+  id: string;
+  player_name: string;
+  clinic_date: string;
+  evaluator: string;
+  suggested_level: SuggestedLevel;
+  final_decision: FinalDecision;
+  comments: string | null;
+  created_at: string;
+}
+
+export interface NewPlayerAssessment {
+  player_name: string;
+  clinic_date: string;
+  evaluator: string;
+  suggested_level: SuggestedLevel;
+  final_decision: FinalDecision;
+  comments?: string | null;
+}
+
+/**
+ * Player Assessment entries from the clinic evaluation flow (admin-entered, replacing the old
+ * standalone Google Form). `player_assessments` is admin-only end to end -- no anon grant at all
+ * (see the player_assessments migration) -- so this, unlike useCompletedMatches/useLiveMatches,
+ * is only ever called with `enabled` gated on isAdmin, same as useAdminRegistrations.
+ */
+export function useAdminAssessments(enabled: boolean) {
+  return useQuery({
+    queryKey: ['admin-assessments'],
+    queryFn: async (): Promise<PlayerAssessmentRow[]> => {
+      const { data, error } = await supabase
+        .from('player_assessments')
+        .select('id, player_name, clinic_date, evaluator, suggested_level, final_decision, comments, created_at')
+        .order('clinic_date', { ascending: false })
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data as PlayerAssessmentRow[]) || [];
+    },
+    enabled,
+  });
+}
+
+export function useCreatePlayerAssessment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: NewPlayerAssessment) => {
+      const { error } = await supabase
+        .from('player_assessments')
+        .insert({ ...payload, comments: payload.comments || null });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-assessments'] });
+    },
+  });
+}
+
 export function useUpdateRegistrationStatus() {
   const queryClient = useQueryClient();
   return useMutation({

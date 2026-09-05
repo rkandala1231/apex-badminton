@@ -5,6 +5,7 @@ import { staffIdFromEmail } from '../lib/staffAuth';
 import { useAuth, useIsAdmin, useIsSuperAdmin } from '../lib/useAuth';
 import { AdminAuthForm } from '../components/admin/AdminAuthForm';
 import { AdminDashboard } from '../components/admin/AdminDashboard';
+import { AdminAssessmentsSection } from '../components/admin/AdminAssessmentsSection';
 import { AdminPlayersSection } from '../components/admin/AdminPlayersSection';
 import { AdminScheduleSection } from '../components/admin/AdminScheduleSection';
 import { AdminDrawsSection } from '../components/admin/AdminDrawsSection';
@@ -15,6 +16,7 @@ import { LiveScoringSection } from '../components/matchcenter/LiveScoringSection
 
 const TOURNEY_SECTIONS = [
   { to: 'registrations', label: 'Registrations' },
+  { to: 'assessments', label: 'Player Assessments' },
   { to: 'players', label: 'Players' },
   { to: 'schedule', label: 'Schedule' },
   { to: 'draws', label: 'Draws' },
@@ -111,6 +113,7 @@ export function Admin() {
               <Routes>
                 <Route index element={<Navigate to="/admin/registrations" replace />} />
                 <Route path="registrations" element={<AdminDashboard />} />
+                <Route path="assessments" element={<AdminAssessmentsSection />} />
                 <Route path="players" element={<AdminPlayersSection />} />
                 <Route path="schedule" element={<AdminScheduleSection />} />
                 <Route path="draws" element={<AdminDrawsSection />} />
