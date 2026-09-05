@@ -56,7 +56,8 @@ export function CompletedMatches() {
   );
 }
 
-function MatchCard({ match }: { match: CompletedMatchRow }) {
+/** Exported so ScheduleSection can render the same completed-match card inline in its merged feed. */
+export function MatchCard({ match }: { match: CompletedMatchRow }) {
   const eventLabel = EVENT_META.find((e) => e.code === match.event_code)?.label ?? match.event_code;
   const when = match.completed_at
     ? new Date(match.completed_at).toLocaleString('en-US', {

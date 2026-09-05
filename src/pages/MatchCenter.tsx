@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { PageShell } from '../components/PageShell';
+import { useRealtimeMatchSync } from '../lib/queries';
 
 const SECTIONS = [
   { to: 'scores', label: 'Scores' },
@@ -14,6 +15,11 @@ const SECTIONS = [
 export function MatchCenter() {
   const location = useLocation();
   const navigate = useNavigate();
+
+  // One shared Realtime subscription for every tab under Match Center -- Scores, Schedule, and
+  // Standings all rely on it to refresh within about a second of an admin scoring a point,
+  // rather than each tab opening (and re-opening on tab switches) its own socket.
+  useRealtimeMatchSync();
 
   // /match-center on its own defaults to the Scores tab.
   useEffect(() => {

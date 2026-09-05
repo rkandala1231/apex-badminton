@@ -19,6 +19,9 @@ const ROUTES = [
   { path: '/formats', expect: 'Format' },
   { path: '/analytics', expect: 'Analytics' },
   { path: '/admin', expect: null }, // auth-gated; just must not crash
+  { path: '/match-center/scores', expect: 'Scores' },
+  { path: '/match-center/schedule', expect: 'Schedule' },
+  { path: '/match-center/standings', expect: 'Standings' },
 ];
 
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined;

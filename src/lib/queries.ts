@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
 import type { CollegeName } from './matchCenterData';
@@ -97,6 +98,8 @@ export interface MatchRow {
   side_a_name: string;
   side_b_name: string;
   winner_side: 'A' | 'B' | null;
+  status: 'in_progress' | 'completed' | 'abandoned';
+  created_at: string;
   completed_at: string | null;
   match_games: MatchGameRow[];
 }
@@ -106,7 +109,7 @@ export type CompletedMatchGameRow = MatchGameRow;
 export type CompletedMatchRow = MatchRow;
 
 const MATCH_SELECT =
-  'id, event_code, stage, format, college_a, college_b, side_a_name, side_b_name, winner_side, completed_at, match_games(game_index, a_score, b_score, winner_side)';
+  'id, event_code, stage, format, college_a, college_b, side_a_name, side_b_name, winner_side, status, created_at, completed_at, match_games(game_index, a_score, b_score, winner_side)';
 
 /** Supabase doesn't guarantee ordering within an embedded relation — sort games client-side. */
 function sortGames(rows: MatchRow[]): MatchRow[] {
@@ -149,8 +152,8 @@ export function useCompletedMatches(eventCode: EventCode | null) {
  * Matches currently being scored. Same `matches`/`match_games` tables as Completed Matches, just
  * filtered to `status = 'in_progress'` instead -- a match can only ever match one of the two
  * queries at a time, and `finishLiveMatch` (matchStats.ts) is what flips it from one to the
- * other. Polls on a short interval since this is the one Match Center tab meant to visibly
- * update while someone's looking at it, without adding a Realtime subscription.
+ * other. Refreshes via the shared Realtime subscription (see useRealtimeMatchSync) within about a
+ * second of an admin scoring a point; the interval below is just a polling fallback.
  */
 export function useLiveMatches(eventCode: EventCode | null) {
   return useQuery({
@@ -171,9 +174,82 @@ export function useLiveMatches(eventCode: EventCode | null) {
       return sortGames((data as MatchRow[]) || []);
     },
     staleTime: 0,
-    refetchInterval: 4000,
+    // Realtime (useRealtimeMatchSync) is the fast path now -- an admin's point update reaches
+    // this tab in about a second via the subscription below. This interval only exists as a
+    // fallback in case that socket ever drops, so it can be much longer than it used to be.
+    refetchInterval: 30_000,
     refetchOnWindowFocus: true,
   });
+}
+
+/**
+ * Chronological schedule of every match that's either being played right now or already
+ * finished, across all events. There's no "upcoming" state here by design: nothing in the schema
+ * records a match before a scorer actually starts it (see matchStats.ts's startMatch), so a true
+ * pre-game schedule doesn't exist as data yet -- this reflects the real matches table as-is
+ * rather than inventing placeholder rows for matches nobody has started.
+ */
+export function useScheduleMatches(eventCode: EventCode | null) {
+  return useQuery({
+    queryKey: ['schedule-matches', eventCode],
+    queryFn: async (): Promise<MatchRow[]> => {
+      let query = supabase
+        .from('matches')
+        .select(MATCH_SELECT)
+        .in('status', ['in_progress', 'completed'])
+        .order('created_at', { ascending: false });
+
+      if (eventCode) {
+        query = query.eq('event_code', eventCode);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return sortGames((data as MatchRow[]) || []);
+    },
+    staleTime: 15_000,
+    refetchInterval: 30_000, // realtime-first, same fallback cadence as useLiveMatches
+    refetchOnWindowFocus: true,
+  });
+}
+
+/**
+ * Opens one Supabase Realtime subscription covering `matches` and `match_games`, and invalidates
+ * every query family derived from them whenever a row changes -- Live Scores, Completed Matches,
+ * Schedule, and Standings all refresh within about a second of an admin scoring a point or
+ * finishing a match, instead of waiting on their next poll.
+ *
+ * Deliberately coarse: any insert/update/delete on either table invalidates all four query
+ * families rather than patching the cache per-row. The dataset is small (one college
+ * tournament's worth of matches), so a full refetch per change is cheap, and it can't drift out
+ * of sync with calc.ts's ranking logic the way a hand-rolled partial cache update could.
+ *
+ * Mount this exactly once (in MatchCenter.tsx) so every tab underneath shares the one channel
+ * instead of each opening its own socket. The polling on useLiveMatches/useScheduleMatches/
+ * usePoolStandings stays in place as a fallback -- if the socket ever drops, those still
+ * eventually catch up on their own.
+ */
+export function useRealtimeMatchSync() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const invalidateAll = () => {
+      queryClient.invalidateQueries({ queryKey: ['live-matches'] });
+      queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+      queryClient.invalidateQueries({ queryKey: ['schedule-matches'] });
+      queryClient.invalidateQueries({ queryKey: ['pool-standings'] });
+    };
+
+    const channel = supabase
+      .channel('matches-live-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, invalidateAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_games' }, invalidateAll)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 }
 
 export interface AnalyticsData {
@@ -443,9 +519,11 @@ export type PoolStandingsResult = IndividualStandingsResult | TeamStandingsResul
 
 /**
  * Fetches everything one pool needs and returns fully ranked, qualification-tagged standings --
- * the UI just renders the result, it never re-derives ranking itself. Draft/unpublished results
- * never reach here at all: only status = 'completed' matches feed calc.ts (see completedOnly in
- * standings/calc.ts), so an in-progress live match can't move the public table.
+ * the UI just renders the result, it never re-derives ranking itself. Only status = 'completed'
+ * matches feed calc.ts (see completedOnly in standings/calc.ts), so an in-progress live match can
+ * never move the public table -- but the moment a match IS marked completed, the shared Realtime
+ * subscription (useRealtimeMatchSync) invalidates this query and the table updates within about a
+ * second, rather than waiting for the polling fallback below.
  */
 export function usePoolStandings(pool: PoolRow | null) {
   return useQuery({
@@ -516,7 +594,9 @@ export function usePoolStandings(pool: PoolRow | null) {
     enabled: !!pool,
     staleTime: 10_000,
     refetchOnWindowFocus: true,
-    refetchInterval: 15_000, // standings should visibly update while someone's watching, same spirit as useLiveMatches
+    // Realtime (useRealtimeMatchSync) invalidates this the moment a match completes -- this
+    // interval is now just a fallback in case that socket ever drops, not the primary sync path.
+    refetchInterval: 60_000,
   });
 }
 

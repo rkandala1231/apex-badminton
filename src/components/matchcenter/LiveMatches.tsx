@@ -50,7 +50,8 @@ export function LiveMatches() {
   );
 }
 
-function LiveMatchCard({ match }: { match: MatchRow }) {
+/** Exported so ScheduleSection can render the same live-match card inline in its merged feed. */
+export function LiveMatchCard({ match }: { match: MatchRow }) {
   const eventLabel = EVENT_META.find((e) => e.code === match.event_code)?.label ?? match.event_code;
   const priorGames = match.match_games.slice(0, -1);
   const current = match.match_games[match.match_games.length - 1] ?? {
