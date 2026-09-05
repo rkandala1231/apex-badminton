@@ -76,15 +76,18 @@ alter table public.registration_events enable row level security;
 grant select, update on public.registrations to authenticated;
 grant select on public.registration_events to authenticated;
 
+drop policy if exists "admins can select registrations" on public.registrations;
 create policy "admins can select registrations" on public.registrations
   for select
   using (public.is_admin());
 
+drop policy if exists "admins can update registrations" on public.registrations;
 create policy "admins can update registrations" on public.registrations
   for update
   using (public.is_admin())
   with check (public.is_admin());
 
+drop policy if exists "admins can select registration_events" on public.registration_events;
 create policy "admins can select registration_events" on public.registration_events
   for select
   using (public.is_admin());
