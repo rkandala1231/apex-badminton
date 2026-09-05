@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
+import type { CollegeName } from './matchCenterData';
 import type {
   AdminRegistrationRow,
   EventCode,
@@ -303,6 +304,7 @@ export type FinalDecision = 'Advance' | 'Hold' | 'Reassess';
 export interface PlayerAssessmentRow {
   id: string;
   player_name: string;
+  college: CollegeName;
   clinic_date: string;
   evaluator: string;
   suggested_level: SuggestedLevel;
@@ -313,6 +315,7 @@ export interface PlayerAssessmentRow {
 
 export interface NewPlayerAssessment {
   player_name: string;
+  college: CollegeName;
   clinic_date: string;
   evaluator: string;
   suggested_level: SuggestedLevel;
@@ -332,7 +335,7 @@ export function useAdminAssessments(enabled: boolean) {
     queryFn: async (): Promise<PlayerAssessmentRow[]> => {
       const { data, error } = await supabase
         .from('player_assessments')
-        .select('id, player_name, clinic_date, evaluator, suggested_level, final_decision, comments, created_at')
+        .select('id, player_name, college, clinic_date, evaluator, suggested_level, final_decision, comments, created_at')
         .order('clinic_date', { ascending: false })
         .order('created_at', { ascending: false });
       if (error) throw error;

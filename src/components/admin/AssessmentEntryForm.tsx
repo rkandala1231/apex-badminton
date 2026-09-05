@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '../../lib/useAuth';
 import { staffIdFromEmail } from '../../lib/staffAuth';
+import { COLLEGES, type CollegeName } from '../../lib/matchCenterData';
 import { useCreatePlayerAssessment, type FinalDecision, type SuggestedLevel } from '../../lib/queries';
 
 const SUGGESTED_LEVELS: SuggestedLevel[] = ['Beginner', 'Intermediate', 'Advanced', 'Competitive'];
@@ -26,6 +27,7 @@ export function AssessmentEntryForm() {
   const createAssessment = useCreatePlayerAssessment();
 
   const [playerName, setPlayerName] = useState('');
+  const [college, setCollege] = useState<CollegeName | ''>('');
   const [clinicDate, setClinicDate] = useState(todayIso());
   const [evaluator, setEvaluator] = useState(() => defaultEvaluator(user?.email));
   const [suggestedLevel, setSuggestedLevel] = useState<SuggestedLevel>('Beginner');
@@ -35,18 +37,20 @@ export function AssessmentEntryForm() {
   const resetForKeepGoing = () => {
     setPlayerName('');
     setComments('');
-    // Clinic date, evaluator, suggested level and final decision stay put -- staff are almost
-    // always entering several players back-to-back at the same clinic, on the same date, and
-    // re-picking the same evaluator/level/decision every single time would be pure friction.
+    // College, clinic date, evaluator, suggested level and final decision stay put -- staff are
+    // almost always entering several players back-to-back at the same clinic, for the same
+    // college, on the same date, and re-picking all of that every single time would be pure
+    // friction.
   };
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!playerName.trim() || !clinicDate || !evaluator.trim()) return;
+    if (!playerName.trim() || !college || !clinicDate || !evaluator.trim()) return;
 
     createAssessment.mutate(
       {
         player_name: playerName.trim(),
+        college,
         clinic_date: clinicDate,
         evaluator: evaluator.trim(),
         suggested_level: suggestedLevel,
@@ -82,6 +86,22 @@ export function AssessmentEntryForm() {
           />
         </div>
         <div className="flex flex-col gap-1.5">
+          <label className={labelCls}>College *</label>
+          <select
+            required
+            value={college}
+            onChange={(e) => setCollege(e.target.value as CollegeName | '')}
+            className={inputCls}
+          >
+            <option value="">Select college</option>
+            {COLLEGES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1.5">
           <label className={labelCls}>Clinic Date *</label>
           <input
             type="date"
@@ -91,7 +111,7 @@ export function AssessmentEntryForm() {
             className={inputCls}
           />
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
           <label className={labelCls}>Evaluator *</label>
           <input
             type="text"

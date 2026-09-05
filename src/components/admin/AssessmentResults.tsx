@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { BarChart, type BarDatum } from '../charts/BarChart';
 import { EmptyState } from '../matchcenter/shared';
+import { COLLEGES } from '../../lib/matchCenterData';
 import {
   useAdminAssessments,
   type FinalDecision,
@@ -32,12 +33,14 @@ function fmtDate(iso: string) {
 export function AssessmentResults() {
   const { data: allRows, isLoading } = useAdminAssessments(true);
   const [search, setSearch] = useState('');
+  const [collegeFilter, setCollegeFilter] = useState('');
   const [levelFilter, setLevelFilter] = useState('');
   const [decisionFilter, setDecisionFilter] = useState('');
 
   const rows = useMemo(() => {
     const s = search.trim().toLowerCase();
     return (allRows || []).filter((r) => {
+      if (collegeFilter && r.college !== collegeFilter) return false;
       if (levelFilter && r.suggested_level !== levelFilter) return false;
       if (decisionFilter && r.final_decision !== decisionFilter) return false;
       if (s) {
@@ -46,7 +49,7 @@ export function AssessmentResults() {
       }
       return true;
     });
-  }, [allRows, search, levelFilter, decisionFilter]);
+  }, [allRows, search, collegeFilter, levelFilter, decisionFilter]);
 
   const levelData: BarDatum[] = useMemo(() => {
     const counts = new Map<string, number>();
@@ -87,6 +90,14 @@ export function AssessmentResults() {
           onChange={(e) => setSearch(e.target.value)}
           className={selectCls}
         />
+        <select value={collegeFilter} onChange={(e) => setCollegeFilter(e.target.value)} className={selectCls}>
+          <option value="">All colleges</option>
+          {COLLEGES.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
         <select value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)} className={selectCls}>
           <option value="">All levels</option>
           {SUGGESTED_LEVELS.map((l) => (
@@ -123,10 +134,10 @@ export function AssessmentResults() {
         <p className="text-center text-[0.86rem] text-text-muted py-12">No assessments match those filters.</p>
       ) : (
         <div className="overflow-x-auto border border-border rounded-2xl">
-          <table className="w-full border-collapse text-[0.85rem] min-w-[760px]">
+          <table className="w-full border-collapse text-[0.85rem] min-w-[860px]">
             <thead>
               <tr>
-                {['Player', 'Clinic Date', 'Evaluator', 'Suggested Level', 'Final Decision', 'Comments'].map((h) => (
+                {['Player', 'College', 'Clinic Date', 'Evaluator', 'Suggested Level', 'Final Decision', 'Comments'].map((h) => (
                   <th
                     key={h}
                     className="text-left py-3 px-3.5 border-b border-border-soft text-text-muted text-[0.7rem] tracking-wide uppercase bg-surface-1 whitespace-nowrap"
@@ -140,6 +151,7 @@ export function AssessmentResults() {
               {rows.map((r) => (
                 <tr key={r.id}>
                   <td className="py-3 px-3.5 border-b border-border-soft whitespace-nowrap">{r.player_name}</td>
+                  <td className="py-3 px-3.5 border-b border-border-soft whitespace-nowrap text-text-secondary">{r.college}</td>
                   <td className="py-3 px-3.5 border-b border-border-soft whitespace-nowrap">{fmtDate(r.clinic_date)}</td>
                   <td className="py-3 px-3.5 border-b border-border-soft whitespace-nowrap">{r.evaluator}</td>
                   <td className="py-3 px-3.5 border-b border-border-soft whitespace-nowrap">
