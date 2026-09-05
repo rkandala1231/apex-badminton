@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useCompletedMatches, type CompletedMatchRow } from '../../lib/queries';
 import { EVENT_META, type EventCode } from '../../lib/types';
 import { EmptyState } from './shared';
@@ -100,8 +101,14 @@ export function MatchCard({ match }: { match: CompletedMatchRow }) {
         <Side name={match.side_b_name} college={match.college_b} won={match.winner_side === 'B'} align="right" />
       </div>
 
-      <div className="mt-3 pt-2.5 border-t border-border-soft text-[0.7rem] text-text-muted uppercase tracking-wide">
-        {eventLabel}
+      <div className="mt-3 pt-2.5 border-t border-border-soft flex items-center justify-between gap-2">
+        <span className="text-[0.7rem] text-text-muted uppercase tracking-wide">{eventLabel}</span>
+        <Link
+          to={`/match-center/match/${match.id}`}
+          className="text-[0.72rem] font-bold text-accent hover:text-accent-hover no-underline"
+        >
+          View KPIs →
+        </Link>
       </div>
     </div>
   );

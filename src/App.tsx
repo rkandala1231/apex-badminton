@@ -41,6 +41,9 @@ const LiveStreamSection = lazy(() =>
     default: m.LiveStreamSection,
   }))
 );
+const MatchKpiPage = lazy(() =>
+  import('./pages/MatchKpiPage').then((m) => ({ default: m.MatchKpiPage }))
+);
 const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })));
 
 const LEGACY_HASH_ROUTES: Record<string, string> = {
@@ -93,6 +96,7 @@ export default function App() {
               <Route path="schedule" element={<ScheduleSection />} />
               <Route path="live-stream" element={<LiveStreamSection />} />
             </Route>
+            <Route path="/match-center/match/:matchId" element={<MatchKpiPage />} />
             <Route path="/admin/*" element={<Admin />} />
           </Routes>
         </Suspense>

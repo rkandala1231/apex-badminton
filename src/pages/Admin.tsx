@@ -10,6 +10,7 @@ import { AdminPlayersSection } from '../components/admin/AdminPlayersSection';
 import { AdminScheduleSection } from '../components/admin/AdminScheduleSection';
 import { AdminDrawsSection } from '../components/admin/AdminDrawsSection';
 import { AdminLiveMatchesSection } from '../components/admin/AdminLiveMatchesSection';
+import { AdminMatchKpiSection } from '../components/admin/AdminMatchKpiSection';
 import { AdminManageStaffSection } from '../components/admin/AdminManageStaffSection';
 import { AdminAccountSection } from '../components/admin/AdminAccountSection';
 import { LiveScoringSection } from '../components/matchcenter/LiveScoringSection';
@@ -22,6 +23,7 @@ const TOURNEY_SECTIONS = [
   { to: 'draws', label: 'Draws' },
   { to: 'live-matches', label: 'Live Matches' },
   { to: 'scoring', label: 'Live Scoring' },
+  { to: 'match-kpis', label: 'Match KPIs' },
   { to: 'account', label: 'Account' },
 ];
 const SUPER_ADMIN_SECTION = { to: 'staff', label: 'Manage Admins' };
@@ -119,6 +121,7 @@ export function Admin() {
                 <Route path="draws" element={<AdminDrawsSection />} />
                 <Route path="live-matches" element={<AdminLiveMatchesSection />} />
                 <Route path="scoring" element={<LiveScoringSection />} />
+                <Route path="match-kpis" element={<AdminMatchKpiSection />} />
                 <Route path="account" element={<AdminAccountSection />} />
                 <Route
                   path="staff"

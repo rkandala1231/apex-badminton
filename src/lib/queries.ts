@@ -11,6 +11,7 @@ import type {
   SummaryStats,
   WeeklyTrendRow,
 } from './types';
+import type { MatchKpis, RecordPointResult } from './kpi/types';
 import {
   assignQualification,
   isPoolComplete,
@@ -620,6 +621,196 @@ export function useUpdateRegistrationStatus() {
       if (context?.previous) {
         queryClient.setQueryData(['admin-registrations'], context.previous);
       }
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Match KPIs (point-win %, point differential, longest streak, clutch-point win rate, result) --
+// see supabase/migrations/20260905190000_match_kpi_schema_and_rpcs.sql. `matches` is already a
+// public-SELECT table, and get_match_kpis() is granted to anon + authenticated, so the dashboard
+// itself needs no auth; only the scoring screen (create/record/undo/complete/synthetic data) is
+// admin-gated, matching the same split Live Scoring already uses.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The one backend-authoritative source for all five KPIs. Summary, Table, and Charts all read
+ * this same query result -- switching between them is a local view-state change, not a refetch
+ * (see MatchKpiDashboard.tsx). A completed match's KPIs never change unless a point is undone
+ * (which only admins can do, before completion), so this stays fresh far longer than the live
+ * match lists above.
+ */
+export function useMatchKpis(matchId: string | null) {
+  return useQuery({
+    queryKey: ['match-kpis', matchId],
+    queryFn: async (): Promise<MatchKpis> => {
+      const { data, error } = await supabase.rpc('get_match_kpis', { p_match_id: matchId });
+      if (error) throw error;
+      return data as MatchKpis;
+    },
+    enabled: !!matchId,
+    staleTime: 60_000,
+  });
+}
+
+export interface PlayerRow {
+  id: string;
+  name: string;
+  college: CollegeName | null;
+  is_synthetic: boolean;
+}
+
+/** Public read of the minimal KPI-feature roster (see the migration header for scope). */
+export function usePlayers(college?: CollegeName | null) {
+  return useQuery({
+    queryKey: ['players', college ?? null],
+    queryFn: async (): Promise<PlayerRow[]> => {
+      let query = supabase.from('players').select('id, name, college, is_synthetic').order('name');
+      if (college) query = query.eq('college', college);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data as PlayerRow[]) || [];
+    },
+  });
+}
+
+export function useCreatePlayer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ name, college }: { name: string; college?: CollegeName | null }) => {
+      const { data, error } = await supabase.rpc('create_player', { p_name: name, p_college: college ?? null });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['players'] });
+    },
+  });
+}
+
+export interface CreateMatchPayload {
+  eventCode: EventCode;
+  stage: 'roundrobin' | 'knockout';
+  collegeA: CollegeName;
+  collegeB: CollegeName;
+  sideAName: string;
+  sideBName: string;
+  sideAPlayerIds?: string[];
+  sideBPlayerIds?: string[];
+  targetPoints: number;
+  winByTwo: boolean;
+  maxPoints: number | null;
+  bestOfGames: number;
+  firstServer: 'A' | 'B';
+}
+
+export function useCreateMatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: CreateMatchPayload): Promise<string> => {
+      const { data, error } = await supabase.rpc('create_match', {
+        p_event_code: p.eventCode,
+        p_stage: p.stage,
+        p_college_a: p.collegeA,
+        p_college_b: p.collegeB,
+        p_side_a_name: p.sideAName,
+        p_side_b_name: p.sideBName,
+        p_side_a_player_ids: p.sideAPlayerIds ?? [],
+        p_side_b_player_ids: p.sideBPlayerIds ?? [],
+        p_target_points: p.targetPoints,
+        p_win_by_two: p.winByTwo,
+        p_max_points: p.maxPoints,
+        p_best_of_games: p.bestOfGames,
+        p_first_server: p.firstServer,
+        p_is_synthetic: false,
+        p_external_video_id: null,
+      });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['schedule-matches'] });
+    },
+  });
+}
+
+function invalidateMatchQueries(queryClient: ReturnType<typeof useQueryClient>, matchId: string) {
+  queryClient.invalidateQueries({ queryKey: ['match-kpis', matchId] });
+  queryClient.invalidateQueries({ queryKey: ['live-matches'] });
+  queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+  queryClient.invalidateQueries({ queryKey: ['schedule-matches'] });
+}
+
+export function useRecordPoint() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ matchId, side }: { matchId: string; side: 'A' | 'B' }): Promise<RecordPointResult> => {
+      const { data, error } = await supabase.rpc('record_match_point', { p_match_id: matchId, p_winning_side: side });
+      if (error) throw error;
+      return data as RecordPointResult;
+    },
+    onSuccess: (_data, { matchId }) => invalidateMatchQueries(queryClient, matchId),
+  });
+}
+
+export function useUndoPoint() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (matchId: string) => {
+      const { data, error } = await supabase.rpc('undo_last_match_point', { p_match_id: matchId });
+      if (error) throw error;
+      return data as RecordPointResult;
+    },
+    onSuccess: (_data, matchId) => invalidateMatchQueries(queryClient, matchId),
+  });
+}
+
+export function useCompleteMatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (matchId: string) => {
+      const { data, error } = await supabase.rpc('complete_match', { p_match_id: matchId });
+      if (error) throw error;
+      return data as { matchId: string; winningSide: 'A' | 'B' };
+    },
+    onSuccess: (_data, matchId) => invalidateMatchQueries(queryClient, matchId),
+  });
+}
+
+/**
+ * Dev-only synthetic-data controls. `generate_synthetic_kpi_matches()` itself refuses to run
+ * unless a super_admin has explicitly enabled `app_config.allow_synthetic_data` against this
+ * specific Supabase project (never done on prod) -- this hook has no client-side environment
+ * check of its own, deliberately, since the backend is the real gate (see the migration header).
+ */
+export function useGenerateSyntheticData() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('generate_synthetic_kpi_matches');
+      if (error) throw error;
+      return data as { playersCreated: number; matchesCreated: number };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+      queryClient.invalidateQueries({ queryKey: ['schedule-matches'] });
+      queryClient.invalidateQueries({ queryKey: ['players'] });
+    },
+  });
+}
+
+export function useDeleteSyntheticData() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('delete_synthetic_kpi_matches');
+      if (error) throw error;
+      return data as { matchesDeleted: number; playersDeleted: number };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+      queryClient.invalidateQueries({ queryKey: ['schedule-matches'] });
+      queryClient.invalidateQueries({ queryKey: ['players'] });
     },
   });
 }

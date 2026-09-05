@@ -22,6 +22,10 @@ const ROUTES = [
   { path: '/match-center/scores', expect: 'Scores' },
   { path: '/match-center/schedule', expect: 'Schedule' },
   { path: '/match-center/standings', expect: 'Standings' },
+  // 'Match KPIs' itself is inside an <h1>, which index.css uppercases visually (innerText
+  // reflects that, same reason this doesn't check any other page's <h1> text directly) -- assert
+  // on the plain-text back-link instead, which renders identically either way.
+  { path: '/match-center/match/00000000-0000-0000-0000-000000000000', expect: 'Back to Scores' },
 ];
 
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined;
