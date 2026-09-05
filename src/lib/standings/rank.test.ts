@@ -56,6 +56,9 @@ describe('cascadeRank — individual/pair pools', () => {
     expect(result[0].decidedBy).toBe('head-to-head');
     expect(result[1].decidedBy).toBe('head-to-head');
     expect(result.every((r) => !r.tieBreakRequired)).toBe(true);
+    // A decisive head-to-head result orders the pair definitively -- they must NOT share a rank
+    // number the way a genuinely unresolved tie would.
+    expect(result.map((r) => r.rank)).toEqual([1, 2, 3]);
   });
 
   it('resolves a three-way tie on matches won by game difference', () => {
@@ -167,5 +170,8 @@ describe('cascadeRank — College Team pools', () => {
     expect(result.map((r) => r.entry.college)).toEqual(['TCNJ', 'Rutgers', 'Rider University']);
     expect(result[0].decidedBy).toBe('head-to-head');
     expect(result[1].decidedBy).toBe('head-to-head');
+    // TCNJ and Rutgers are definitively ordered by head-to-head, so they get distinct sequential
+    // ranks (1 and 2), not a shared rank -- Rider is a separate, lower primary-criterion group.
+    expect(result.map((r) => r.rank)).toEqual([1, 2, 3]);
   });
 });

@@ -79,8 +79,21 @@ function resolveGroup<T>(group: T[], tiebreakers: Tiebreaker<T>[], tbIndex: numb
   if (group.length === 2) {
     const [a, b] = group;
     const h2h = headToHead(a, b);
-    if (h2h === 'a') return [{ entries: [a, b], tieBreakRequired: false, decidedBy: 'head-to-head' }];
-    if (h2h === 'b') return [{ entries: [b, a], tieBreakRequired: false, decidedBy: 'head-to-head' }];
+    // A decisive head-to-head result gives the pair a definite order, so each entry becomes its
+    // own singleton group (and therefore gets its own sequential rank) rather than sharing one --
+    // sharing a rank is reserved for entries that are genuinely still tied/unresolved.
+    if (h2h === 'a') {
+      return [
+        { entries: [a], tieBreakRequired: false, decidedBy: 'head-to-head' },
+        { entries: [b], tieBreakRequired: false, decidedBy: 'head-to-head' },
+      ];
+    }
+    if (h2h === 'b') {
+      return [
+        { entries: [b], tieBreakRequired: false, decidedBy: 'head-to-head' },
+        { entries: [a], tieBreakRequired: false, decidedBy: 'head-to-head' },
+      ];
+    }
     // No decisive head-to-head available (e.g. the pool hasn't reached that match yet) -- fall
     // through to whatever numeric criteria remain rather than guessing.
     if (tbIndex < tiebreakers.length) {
