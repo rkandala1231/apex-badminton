@@ -20,9 +20,34 @@ const labelCls = 'text-[0.78rem] font-bold text-text-secondary block mb-1.5';
 
 type Tab = 'score' | 'test-data';
 
+// Same pattern as MatchKpiDashboard's VIEW_KEY: sessionStorage so the "View full KPIs" link
+// survives a refresh or navigating away and back within the same tab, without needing a backend
+// "recent matches" list. Cleared once you start scoring a different match ("Score another
+// match"), so it never points at a stale match indefinitely.
+const ACTIVE_MATCH_KEY = 'apex-kpi-active-match';
+
+function initialActiveMatchId(): string | null {
+  try {
+    return sessionStorage.getItem(ACTIVE_MATCH_KEY);
+  } catch {
+    // sessionStorage can throw in some contexts (private browsing, etc) -- fall back silently.
+    return null;
+  }
+}
+
 export function AdminMatchKpiSection() {
   const [tab, setTab] = useState<Tab>('score');
-  const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
+  const [activeMatchId, setActiveMatchId] = useState<string | null>(initialActiveMatchId);
+
+  const setActiveMatch = (matchId: string | null) => {
+    setActiveMatchId(matchId);
+    try {
+      if (matchId) sessionStorage.setItem(ACTIVE_MATCH_KEY, matchId);
+      else sessionStorage.removeItem(ACTIVE_MATCH_KEY);
+    } catch {
+      // Non-fatal -- it just won't survive a refresh this session.
+    }
+  };
 
   return (
     <div>
@@ -44,9 +69,9 @@ export function AdminMatchKpiSection() {
       <div className="mt-5">
         {tab === 'score' &&
           (activeMatchId ? (
-            <ScoringBoard matchId={activeMatchId} onDone={() => setActiveMatchId(null)} />
+            <ScoringBoard matchId={activeMatchId} onDone={() => setActiveMatch(null)} />
           ) : (
-            <NewMatchForm onCreated={setActiveMatchId} />
+            <NewMatchForm onCreated={setActiveMatch} />
           ))}
         {tab === 'test-data' && <TestDataControls />}
       </div>
@@ -164,11 +189,28 @@ function NewMatchForm({ onCreated }: { onCreated: (matchId: string) => void }) {
 }
 
 function ScoringBoard({ matchId, onDone }: { matchId: string; onDone: () => void }) {
-  const { data: kpis, isLoading } = useMatchKpis(matchId);
+  const { data: kpis, isLoading, isError } = useMatchKpis(matchId);
   const recordPoint = useRecordPoint();
   const undoPoint = useUndoPoint();
   const completeMatch = useCompleteMatch();
   const [confirmingComplete, setConfirmingComplete] = useState(false);
+
+  // A matchId recovered from a prior session (see ACTIVE_MATCH_KEY) can point at a match that no
+  // longer resolves -- without this, that would otherwise get stuck on the loading skeleton below
+  // forever, since isLoading turns false but kpis stays undefined.
+  if (isError) {
+    return (
+      <div className="bg-surface-1 border border-border rounded-2xl p-6 max-w-[560px] flex flex-col gap-3">
+        <p className="text-[0.85rem] text-text-secondary">Couldn&apos;t load that match anymore.</p>
+        <button
+          onClick={onDone}
+          className="self-start rounded-full bg-accent text-[#0c0a08] font-bold text-[0.82rem] px-4 py-2"
+        >
+          Start a new match
+        </button>
+      </div>
+    );
+  }
 
   if (isLoading || !kpis) {
     return <div className="h-64 bg-surface-1 border border-border rounded-2xl animate-pulse" />;
