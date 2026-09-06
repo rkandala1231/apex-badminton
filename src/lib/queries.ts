@@ -12,6 +12,7 @@ import type {
   WeeklyTrendRow,
 } from './types';
 import type { MatchKpis, RecordPointResult } from './kpi/types';
+import type { PlayerLeaderboardRow, PlayerProfile } from './playerStats/types';
 import {
   assignQualification,
   isPoolComplete,
@@ -98,6 +99,8 @@ export interface MatchRow {
   college_b: string;
   side_a_name: string;
   side_b_name: string;
+  side_a_player_ids: string[];
+  side_b_player_ids: string[];
   first_server: 'A' | 'B';
   winner_side: 'A' | 'B' | null;
   status: 'scheduled' | 'in_progress' | 'completed' | 'abandoned' | 'cancelled';
@@ -106,6 +109,7 @@ export interface MatchRow {
   scheduled_at: string | null;
   court: string | null;
   is_published: boolean;
+  external_video_id: string | null;
   match_games: MatchGameRow[];
 }
 
@@ -114,7 +118,7 @@ export type CompletedMatchGameRow = MatchGameRow;
 export type CompletedMatchRow = MatchRow;
 
 const MATCH_SELECT =
-  'id, event_code, stage, format, college_a, college_b, side_a_name, side_b_name, first_server, winner_side, status, created_at, completed_at, scheduled_at, court, is_published, match_games(game_index, a_score, b_score, winner_side)';
+  'id, event_code, stage, format, college_a, college_b, side_a_name, side_b_name, side_a_player_ids, side_b_player_ids, first_server, winner_side, status, created_at, completed_at, scheduled_at, court, is_published, external_video_id, match_games(game_index, a_score, b_score, winner_side)';
 
 /** Supabase doesn't guarantee ordering within an embedded relation — sort games client-side. */
 function sortGames(rows: MatchRow[]): MatchRow[] {
@@ -848,6 +852,64 @@ export function useCreatePlayer() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['players'] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Player Statistics (Home > Analytics > Player Statistics) -- see
+// supabase/migrations/20260907010000_player_statistics_rpcs.sql. Both RPCs are public analytics
+// (granted to anon + authenticated, same trust posture as get_match_kpis) and deliberately kept
+// short-lived/refetch-happy rather than long-cached, since the whole point is that a player's
+// numbers are current the moment their latest match completes.
+// ---------------------------------------------------------------------------------------------
+
+/** One player's full profile: career stats, MVP score (once qualified), and match history. */
+export function usePlayerProfile(playerId: string | null) {
+  return useQuery({
+    queryKey: ['player-profile', playerId],
+    queryFn: async (): Promise<PlayerProfile> => {
+      const { data, error } = await supabase.rpc('get_player_profile', { p_player_id: playerId });
+      if (error) throw error;
+      return data as PlayerProfile;
+    },
+    enabled: !!playerId,
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+/** MVP-ranked leaderboard across every player with >= 3 completed matches. */
+export function usePlayerLeaderboard() {
+  return useQuery({
+    queryKey: ['player-leaderboard'],
+    queryFn: async (): Promise<PlayerLeaderboardRow[]> => {
+      const { data, error } = await supabase.rpc('get_player_leaderboard');
+      if (error) throw error;
+      return (data as PlayerLeaderboardRow[]) || [];
+    },
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+/**
+ * Sets (or clears) a completed match's linked YouTube video -- a plain `matches` update, not an
+ * RPC, matching how other simple admin edits (startScheduledMatch/revertScheduledMatch) already
+ * bypass the RPC layer here; there's no business rule to enforce beyond the existing
+ * "admins can update matches" RLS policy. Accepts either a bare YouTube video id or a full URL --
+ * MatchVideoLinkControl extracts the id client-side before calling this.
+ */
+export function useSetMatchVideo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ matchId, videoId }: { matchId: string; videoId: string | null }) => {
+      const { error } = await supabase.from('matches').update({ external_video_id: videoId }).eq('id', matchId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['player-profile'] });
+      queryClient.invalidateQueries({ queryKey: ['match-kpis'] });
     },
   });
 }

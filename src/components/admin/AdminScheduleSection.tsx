@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import type { CollegeName } from '../../lib/matchCenterData';
 import { computeDisplayName } from '../matchcenter/livescoring/pairing';
+import type { PickedPlayer } from '../matchcenter/livescoring/PlayerPicker';
 import { SidePicker } from '../matchcenter/livescoring/SidePicker';
 import { EVENT_LABEL } from '../matchcenter/livescoring/constants';
 import type { Format, LiveEventType, Side, Stage } from '../matchcenter/livescoring/types';
@@ -10,12 +11,21 @@ import {
   useCancelScheduledMatch,
   useCreateScheduledMatch,
   useDeleteScheduledMatch,
+  usePlayers,
   usePublishMatch,
   useUnpublishMatch,
   useUpdateScheduledMatch,
   type MatchRow,
+  type PlayerRow,
   type ScheduledMatchPayload,
 } from '../../lib/queries';
+
+function idsToPickedPlayers(ids: string[], roster: PlayerRow[] | undefined): PickedPlayer[] {
+  return ids
+    .map((id) => roster?.find((p) => p.id === id))
+    .filter((p): p is PlayerRow => !!p)
+    .map((p) => ({ id: p.id, name: p.name }));
+}
 import { EmptyState } from '../matchcenter/shared';
 
 const inputCls = 'bg-surface-2 border border-border rounded-md px-3 py-2.5 text-text-primary text-[0.88rem] w-full';
@@ -251,14 +261,36 @@ function ScheduleMatchForm({ existing, onDone }: { existing: MatchRow | null; on
 
   const [collegeA, setCollegeA] = useState<CollegeName | ''>((existing?.college_a as CollegeName) ?? '');
   const [collegeB, setCollegeB] = useState<CollegeName | ''>((existing?.college_b as CollegeName) ?? '');
-  const [playersA, setPlayersA] = useState<string[]>([]);
-  const [playersB, setPlayersB] = useState<string[]>([]);
+  const [selectedA, setSelectedA] = useState<PickedPlayer[]>([]);
+  const [selectedB, setSelectedB] = useState<PickedPlayer[]>([]);
   const [manualA, setManualA] = useState(existing?.side_a_name ?? '');
   const [manualB, setManualB] = useState(existing?.side_b_name ?? '');
 
   const [scheduledAtLocal, setScheduledAtLocal] = useState(toDatetimeLocal(existing?.scheduled_at ?? null));
   const [court, setCourt] = useState(existing?.court ?? '');
 
+  // Editing an existing scheduled match: resolve its stored side_a/b_player_ids (uuids) back to
+  // {id,name} pairs by matching against each side's roster, then seed the pickers once. A ref
+  // guards this against re-firing on every roster refetch and clobbering the user's own edits.
+  const prefilled = useRef(false);
+  const { data: rosterA } = usePlayers(collegeA || null);
+  const { data: rosterB } = usePlayers(collegeB || null);
+  useEffect(() => {
+    if (prefilled.current || !existing) return;
+    const idsA = existing.side_a_player_ids ?? [];
+    const idsB = existing.side_b_player_ids ?? [];
+    if (idsA.length === 0 && idsB.length === 0) {
+      prefilled.current = true;
+      return;
+    }
+    if (!rosterA || !rosterB) return; // wait for both rosters to load before seeding
+    setSelectedA(idsToPickedPlayers(idsA, rosterA));
+    setSelectedB(idsToPickedPlayers(idsB, rosterB));
+    prefilled.current = true;
+  }, [existing, rosterA, rosterB]);
+
+  const playersA = selectedA.map((p) => p.name);
+  const playersB = selectedB.map((p) => p.name);
   const nameA = computeDisplayName({ eventType, college: collegeA, players: playersA, manual: manualA });
   const nameB = computeDisplayName({ eventType, college: collegeB, players: playersB, manual: manualB });
 
@@ -291,6 +323,8 @@ function ScheduleMatchForm({ existing, onDone }: { existing: MatchRow | null; on
       collegeB,
       sideAName: nameA.trim(),
       sideBName: nameB.trim(),
+      sideAPlayerIds: selectedA.map((p) => p.id),
+      sideBPlayerIds: selectedB.map((p) => p.id),
       firstServer,
       scheduledAt: new Date(scheduledAtLocal).toISOString(),
       court: court.trim() || null,
@@ -370,11 +404,11 @@ function ScheduleMatchForm({ existing, onDone }: { existing: MatchRow | null; on
           college={collegeA}
           onCollege={(c) => {
             setCollegeA(c);
-            setPlayersA([]);
+            setSelectedA([]);
             setManualA('');
           }}
-          players={playersA}
-          onPlayers={setPlayersA}
+          selectedPlayers={selectedA}
+          onSelectedPlayers={setSelectedA}
           manual={manualA}
           onManual={setManualA}
         />
@@ -384,11 +418,11 @@ function ScheduleMatchForm({ existing, onDone }: { existing: MatchRow | null; on
           college={collegeB}
           onCollege={(c) => {
             setCollegeB(c);
-            setPlayersB([]);
+            setSelectedB([]);
             setManualB('');
           }}
-          players={playersB}
-          onPlayers={setPlayersB}
+          selectedPlayers={selectedB}
+          onSelectedPlayers={setSelectedB}
           manual={manualB}
           onManual={setManualB}
         />

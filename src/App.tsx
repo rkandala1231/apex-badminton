@@ -18,6 +18,15 @@ const FormatsPage = lazy(() =>
 const AnalyticsPage = lazy(() =>
   import('./pages/AnalyticsPage').then((m) => ({ default: m.AnalyticsPage }))
 );
+const Analytics = lazy(() =>
+  import('./components/sections/Analytics').then((m) => ({ default: m.Analytics }))
+);
+const PlayerStatsSection = lazy(() =>
+  import('./components/analytics/PlayerStatsSection').then((m) => ({ default: m.PlayerStatsSection }))
+);
+const PlayerProfileSection = lazy(() =>
+  import('./components/analytics/PlayerProfileSection').then((m) => ({ default: m.PlayerProfileSection }))
+);
 const MatchCenter = lazy(() =>
   import('./pages/MatchCenter').then((m) => ({ default: m.MatchCenter }))
 );
@@ -87,7 +96,11 @@ export default function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/tournament" element={<TournamentPage />} />
             <Route path="/formats" element={<FormatsPage />} />
-            <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/analytics" element={<AnalyticsPage />}>
+              <Route path="overview" element={<Analytics />} />
+              <Route path="players" element={<PlayerStatsSection />} />
+              <Route path="players/:playerId" element={<PlayerProfileSection />} />
+            </Route>
             <Route path="/match-center" element={<MatchCenter />}>
               <Route path="scores" element={<ScoresSection />} />
               <Route path="standings" element={<StandingsSection />} />

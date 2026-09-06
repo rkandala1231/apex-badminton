@@ -16,14 +16,8 @@ export const DRAW_EVENTS: { code: EventCode; label: string }[] = [
   { code: 'XD', label: 'Mixed Doubles' },
 ];
 
-export interface Player {
-  name: string;
-  college: CollegeName;
-  events: EventCode[];
-}
-
-// No players yet — colleges are registered, rosters are not in.
-export const PLAYERS: Player[] = [];
+// The old static roster (Player/PLAYERS) is gone -- real players now live in the `players` table
+// (see src/lib/queries.ts's usePlayers()/useCreatePlayer(), and PlayerPicker.tsx which uses them).
 
 export interface ScheduleRow {
   time: string;

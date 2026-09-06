@@ -21,6 +21,8 @@ export type SavableMatchState = Pick<
   | 'nameB'
   | 'collegeA'
   | 'collegeB'
+  | 'playerIdsA'
+  | 'playerIdsB'
   | 'firstServer'
   | 'games'
   | 'log'
@@ -89,8 +91,8 @@ export async function saveMatchResult({ state, winnerSide, status, scoredBy }: S
     event_code: state.eventType,
     college_a: state.collegeA,
     college_b: state.collegeB,
-    side_a_player_ids: [],
-    side_b_player_ids: [],
+    side_a_player_ids: state.playerIdsA ?? [],
+    side_b_player_ids: state.playerIdsB ?? [],
     side_a_name: state.nameA,
     side_b_name: state.nameB,
     first_server: state.firstServer,
@@ -140,6 +142,8 @@ export interface LiveMatchSetup {
   nameB: string;
   collegeA: CollegeName | null;
   collegeB: CollegeName | null;
+  sideAPlayerIds?: string[];
+  sideBPlayerIds?: string[];
   firstServer: Side;
   scoredBy?: string | null;
 }
@@ -165,8 +169,8 @@ export async function startLiveMatch(setup: LiveMatchSetup): Promise<string> {
     event_code: setup.eventType,
     college_a: setup.collegeA,
     college_b: setup.collegeB,
-    side_a_player_ids: [],
-    side_b_player_ids: [],
+    side_a_player_ids: setup.sideAPlayerIds ?? [],
+    side_b_player_ids: setup.sideBPlayerIds ?? [],
     side_a_name: setup.nameA,
     side_b_name: setup.nameB,
     first_server: setup.firstServer,
@@ -348,6 +352,8 @@ export interface ResumableMatch {
   nameB: string;
   collegeA: CollegeName | null;
   collegeB: CollegeName | null;
+  playerIdsA: string[];
+  playerIdsB: string[];
   firstServer: Side;
   games: GameState[];
   server: Side;
@@ -372,7 +378,9 @@ export interface ResumableMatch {
 export async function fetchResumableMatch(matchId: string): Promise<ResumableMatch> {
   const { data: match, error: matchError } = await supabase
     .from('matches')
-    .select('id, stage, format, event_code, college_a, college_b, side_a_name, side_b_name, first_server, status')
+    .select(
+      'id, stage, format, event_code, college_a, college_b, side_a_player_ids, side_b_player_ids, side_a_name, side_b_name, first_server, status'
+    )
     .eq('id', matchId)
     .single();
   if (matchError) throw matchError;
@@ -432,6 +440,8 @@ export async function fetchResumableMatch(matchId: string): Promise<ResumableMat
     nameB: match.side_b_name as string,
     collegeA: (match.college_a as CollegeName) ?? null,
     collegeB: (match.college_b as CollegeName) ?? null,
+    playerIdsA: (match.side_a_player_ids as string[] | null) ?? [],
+    playerIdsB: (match.side_b_player_ids as string[] | null) ?? [],
     firstServer: match.first_server as Side,
     games,
     server,

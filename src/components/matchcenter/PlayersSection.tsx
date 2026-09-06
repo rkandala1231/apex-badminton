@@ -1,11 +1,16 @@
 import { useState } from 'react';
-import { COLLEGES, PLAYERS } from '../../lib/matchCenterData';
+import { COLLEGES } from '../../lib/matchCenterData';
+import { usePlayers } from '../../lib/queries';
 import { SubTabs, EmptyState } from './shared';
 
 type Tab = 'name' | 'college';
 
 export function PlayersSection() {
   const [tab, setTab] = useState<Tab>('name');
+  // Real roster, populated as players are picked in Live Scoring / Schedule (PlayerPicker) --
+  // replaces the old always-empty static PLAYERS constant this section used to read.
+  const { data: players } = usePlayers();
+  const roster = players || [];
 
   return (
     <div>
@@ -24,25 +29,32 @@ export function PlayersSection() {
       />
 
       {tab === 'name' &&
-        (PLAYERS.length === 0 ? (
+        (roster.length === 0 ? (
           <EmptyState className="mt-5" text="No players registered yet. Rosters will appear here as colleges register." />
         ) : (
-          <div className="mt-5">{/* alphabetical player list renders here */}</div>
+          <ul className="mt-5 columns-2 sm:columns-3 gap-4">
+            {roster.map((p) => (
+              <li key={p.id} className="text-[0.88rem] text-text-secondary break-inside-avoid mb-1.5">
+                {p.name}
+                {p.college && <span className="text-text-muted"> · {p.college}</span>}
+              </li>
+            ))}
+          </ul>
         ))}
 
       {tab === 'college' && (
         <div className="mt-5 grid gap-4 sm:grid-cols-3">
           {COLLEGES.map((c) => {
-            const roster = PLAYERS.filter((p) => p.college === c);
+            const collegeRoster = roster.filter((p) => p.college === c);
             return (
               <div key={c} className="bg-surface-1 border border-border rounded-2xl p-5">
                 <h3 className="font-sans normal-case font-extrabold text-[0.98rem] text-text-primary mb-2">{c}</h3>
-                {roster.length === 0 ? (
+                {collegeRoster.length === 0 ? (
                   <p className="text-[0.82rem] text-text-muted">No players registered yet.</p>
                 ) : (
                   <ul className="flex flex-col gap-1.5">
-                    {roster.map((p) => (
-                      <li key={p.name} className="text-[0.88rem] text-text-secondary">
+                    {collegeRoster.map((p) => (
+                      <li key={p.id} className="text-[0.88rem] text-text-secondary">
                         {p.name}
                       </li>
                     ))}

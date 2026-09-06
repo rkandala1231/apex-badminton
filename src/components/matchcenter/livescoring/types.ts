@@ -28,6 +28,9 @@ export interface MatchState {
   collegeB: CollegeName | null;
   playersA: string[];
   playersB: string[];
+  /** Real `players.id` rows behind playersA/playersB, when picked via PlayerPicker. */
+  playerIdsA: string[];
+  playerIdsB: string[];
   firstServer: Side;
   started: boolean;
   games: GameState[];
@@ -62,6 +65,9 @@ export interface StartSetup {
   collegeB: CollegeName | null;
   playersA: string[];
   playersB: string[];
+  /** Real `players.id` rows behind playersA/playersB, when picked via PlayerPicker. */
+  playerIdsA?: string[];
+  playerIdsB?: string[];
   firstServer: Side;
   /**
    * Set when this match was picked from the Schedule tab instead of set up ad hoc. Tells

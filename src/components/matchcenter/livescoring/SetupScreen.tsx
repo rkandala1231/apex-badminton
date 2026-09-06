@@ -3,6 +3,7 @@ import type { CollegeName } from '../../../lib/matchCenterData';
 import { EVENT_LABEL, HARD_CAP, INTERVAL_AT, POINTS_TO_WIN, WIN_BY } from './constants';
 import { computeDisplayName } from './pairing';
 import { PickFromSchedule } from './PickFromSchedule';
+import type { PickedPlayer } from './PlayerPicker';
 import { SidePicker } from './SidePicker';
 import type { Format, LiveEventType, Side, Stage, StartSetup } from './types';
 
@@ -99,8 +100,8 @@ function AdHocForm({ onStart }: { onStart: (setup: StartSetup) => void }) {
 
   const [collegeA, setCollegeA] = useState<CollegeName | ''>('');
   const [collegeB, setCollegeB] = useState<CollegeName | ''>('');
-  const [playersA, setPlayersA] = useState<string[]>([]);
-  const [playersB, setPlayersB] = useState<string[]>([]);
+  const [selectedA, setSelectedA] = useState<PickedPlayer[]>([]);
+  const [selectedB, setSelectedB] = useState<PickedPlayer[]>([]);
   const [manualA, setManualA] = useState('');
   const [manualB, setManualB] = useState('');
 
@@ -113,12 +114,14 @@ function AdHocForm({ onStart }: { onStart: (setup: StartSetup) => void }) {
   function pickEvent(next: LiveEventType) {
     setEventType(next);
     // Player/pair eligibility depends on the event — clear stale picks rather than carry them over.
-    setPlayersA([]);
-    setPlayersB([]);
+    setSelectedA([]);
+    setSelectedB([]);
     setManualA('');
     setManualB('');
   }
 
+  const playersA = selectedA.map((p) => p.name);
+  const playersB = selectedB.map((p) => p.name);
   const nameA = computeDisplayName({ eventType, college: collegeA, players: playersA, manual: manualA });
   const nameB = computeDisplayName({ eventType, college: collegeB, players: playersB, manual: manualB });
   const readyA = nameA.trim().length > 0;
@@ -180,8 +183,8 @@ function AdHocForm({ onStart }: { onStart: (setup: StartSetup) => void }) {
             eventType={eventType}
             college={collegeA}
             onCollege={setCollegeA}
-            players={playersA}
-            onPlayers={setPlayersA}
+            selectedPlayers={selectedA}
+            onSelectedPlayers={setSelectedA}
             manual={manualA}
             onManual={setManualA}
           />
@@ -190,8 +193,8 @@ function AdHocForm({ onStart }: { onStart: (setup: StartSetup) => void }) {
             eventType={eventType}
             college={collegeB}
             onCollege={setCollegeB}
-            players={playersB}
-            onPlayers={setPlayersB}
+            selectedPlayers={selectedB}
+            onSelectedPlayers={setSelectedB}
             manual={manualB}
             onManual={setManualB}
           />
@@ -257,6 +260,8 @@ function AdHocForm({ onStart }: { onStart: (setup: StartSetup) => void }) {
             collegeB: collegeB || null,
             playersA,
             playersB,
+            playerIdsA: selectedA.map((p) => p.id),
+            playerIdsB: selectedB.map((p) => p.id),
             firstServer,
           })
         }
