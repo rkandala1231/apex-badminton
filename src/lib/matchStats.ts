@@ -244,3 +244,40 @@ export async function discardLiveMatch(matchId: string): Promise<void> {
   const { error } = await supabase.from('matches').delete().eq('id', matchId);
   if (error) throw error;
 }
+
+/**
+ * Transitions an existing scheduled match (see queries.ts's Real Schedule section) to
+ * `in_progress` -- the "pick from schedule" path through Live Scoring's SetupScreen. Unlike
+ * `startLiveMatch` above, this never creates a new row; it updates the one an admin already
+ * created (and possibly published) on the Schedule tab, so the match keeps its identity instead
+ * of vanishing from Schedule and reappearing as an unrelated Live Scores row. `.eq('status',
+ * 'scheduled')` guards against a double-start race (two admins picking the same match at once, or
+ * a stale cached list) -- if the row has already moved on, the update matches zero rows and the
+ * caller sees no error but should re-check before proceeding; callers are expected to refetch the
+ * schedule list afterward the same way `useCreateScheduledMatch` etc. already invalidate it.
+ */
+export async function startScheduledMatch(matchId: string, firstServer: Side): Promise<void> {
+  const { error } = await supabase
+    .from('matches')
+    .update({ status: 'in_progress', first_server: firstServer })
+    .eq('id', matchId)
+    .eq('status', 'scheduled');
+  if (error) throw error;
+}
+
+/**
+ * Undoes `startScheduledMatch` -- used when a match started from Schedule is ended with zero
+ * points scored (see useLiveScoring's endMatch). Unlike `discardLiveMatch`, this never deletes the
+ * row: it's admin's Schedule data, possibly already published, not something created just for
+ * this live session. `.eq('status', 'in_progress')` guards against reverting a match that's
+ * somehow moved further along since (shouldn't happen given the zero-points check, but cheap
+ * insurance against a race).
+ */
+export async function revertScheduledMatch(matchId: string): Promise<void> {
+  const { error } = await supabase
+    .from('matches')
+    .update({ status: 'scheduled' })
+    .eq('id', matchId)
+    .eq('status', 'in_progress');
+  if (error) throw error;
+}

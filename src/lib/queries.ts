@@ -98,10 +98,14 @@ export interface MatchRow {
   college_b: string;
   side_a_name: string;
   side_b_name: string;
+  first_server: 'A' | 'B';
   winner_side: 'A' | 'B' | null;
-  status: 'in_progress' | 'completed' | 'abandoned';
+  status: 'scheduled' | 'in_progress' | 'completed' | 'abandoned' | 'cancelled';
   created_at: string;
   completed_at: string | null;
+  scheduled_at: string | null;
+  court: string | null;
+  is_published: boolean;
   match_games: MatchGameRow[];
 }
 
@@ -110,7 +114,7 @@ export type CompletedMatchGameRow = MatchGameRow;
 export type CompletedMatchRow = MatchRow;
 
 const MATCH_SELECT =
-  'id, event_code, stage, format, college_a, college_b, side_a_name, side_b_name, winner_side, status, created_at, completed_at, match_games(game_index, a_score, b_score, winner_side)';
+  'id, event_code, stage, format, college_a, college_b, side_a_name, side_b_name, first_server, winner_side, status, created_at, completed_at, scheduled_at, court, is_published, match_games(game_index, a_score, b_score, winner_side)';
 
 /** Supabase doesn't guarantee ordering within an embedded relation — sort games client-side. */
 function sortGames(rows: MatchRow[]): MatchRow[] {
@@ -184,51 +188,20 @@ export function useLiveMatches(eventCode: EventCode | null) {
 }
 
 /**
- * Chronological schedule of every match that's either being played right now or already
- * finished, across all events. There's no "upcoming" state here by design: nothing in the schema
- * records a match before a scorer actually starts it (see matchStats.ts's startMatch), so a true
- * pre-game schedule doesn't exist as data yet -- this reflects the real matches table as-is
- * rather than inventing placeholder rows for matches nobody has started.
- */
-export function useScheduleMatches(eventCode: EventCode | null) {
-  return useQuery({
-    queryKey: ['schedule-matches', eventCode],
-    queryFn: async (): Promise<MatchRow[]> => {
-      let query = supabase
-        .from('matches')
-        .select(MATCH_SELECT)
-        .in('status', ['in_progress', 'completed'])
-        .order('created_at', { ascending: false });
-
-      if (eventCode) {
-        query = query.eq('event_code', eventCode);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return sortGames((data as MatchRow[]) || []);
-    },
-    staleTime: 15_000,
-    refetchInterval: 30_000, // realtime-first, same fallback cadence as useLiveMatches
-    refetchOnWindowFocus: true,
-  });
-}
-
-/**
  * Opens one Supabase Realtime subscription covering `matches` and `match_games`, and invalidates
  * every query family derived from them whenever a row changes -- Live Scores, Completed Matches,
- * Schedule, and Standings all refresh within about a second of an admin scoring a point or
- * finishing a match, instead of waiting on their next poll.
+ * Schedule (both the public upcoming list and the admin draft+published list), and Standings all
+ * refresh within about a second of an admin scoring a point, publishing a match, or finishing one,
+ * instead of waiting on their next poll.
  *
- * Deliberately coarse: any insert/update/delete on either table invalidates all four query
- * families rather than patching the cache per-row. The dataset is small (one college
- * tournament's worth of matches), so a full refetch per change is cheap, and it can't drift out
- * of sync with calc.ts's ranking logic the way a hand-rolled partial cache update could.
+ * Deliberately coarse: any insert/update/delete on either table invalidates every query family
+ * rather than patching the cache per-row. The dataset is small (one college tournament's worth of
+ * matches), so a full refetch per change is cheap, and it can't drift out of sync with calc.ts's
+ * ranking logic the way a hand-rolled partial cache update could.
  *
  * Mount this exactly once (in MatchCenter.tsx) so every tab underneath shares the one channel
- * instead of each opening its own socket. The polling on useLiveMatches/useScheduleMatches/
- * usePoolStandings stays in place as a fallback -- if the socket ever drops, those still
- * eventually catch up on their own.
+ * instead of each opening its own socket. The polling on useLiveMatches/usePoolStandings stays in
+ * place as a fallback -- if the socket ever drops, those still eventually catch up on their own.
  */
 export function useRealtimeMatchSync() {
   const queryClient = useQueryClient();
@@ -237,7 +210,8 @@ export function useRealtimeMatchSync() {
     const invalidateAll = () => {
       queryClient.invalidateQueries({ queryKey: ['live-matches'] });
       queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-      queryClient.invalidateQueries({ queryKey: ['schedule-matches'] });
+      queryClient.invalidateQueries({ queryKey: ['schedule-upcoming'] });
+      queryClient.invalidateQueries({ queryKey: ['schedule-admin'] });
       queryClient.invalidateQueries({ queryKey: ['pool-standings'] });
     };
 
@@ -251,6 +225,196 @@ export function useRealtimeMatchSync() {
       supabase.removeChannel(channel);
     };
   }, [queryClient]);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Real Schedule (Admin > Schedule, public Match Center > Schedule) -- see
+// supabase/migrations/20260906010000_real_schedule_fields.sql. A scheduled match is a `matches`
+// row with status 'scheduled' (or 'cancelled', if called off before it started); `is_published`
+// controls whether the public can see it at all (RLS enforces this server-side -- the
+// `.eq('is_published', true)` below is belt-and-suspenders, not the actual security boundary).
+// These are direct table reads/writes gated by the same RLS policies matchStats.ts already
+// relies on for Live Scoring -- no new RPCs needed. All scoring-format columns (target_points,
+// win_by_two, max_points, best_of_games) are left out of every insert/update below so they fall
+// back to the same column defaults (15 / true / 16 / from-format) that Live Scoring's ad hoc
+// matches already use.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Published, not-yet-started (or published-then-cancelled) matches for the public Schedule tab.
+ * Ordered soonest-first so the next match up is always at the top.
+ */
+export function useUpcomingSchedule(eventCode: EventCode | null) {
+  return useQuery({
+    queryKey: ['schedule-upcoming', eventCode],
+    queryFn: async (): Promise<MatchRow[]> => {
+      let query = supabase
+        .from('matches')
+        .select(MATCH_SELECT)
+        .in('status', ['scheduled', 'cancelled'])
+        .eq('is_published', true)
+        .order('scheduled_at', { ascending: true });
+      if (eventCode) {
+        query = query.eq('event_code', eventCode);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return sortGames((data as MatchRow[]) || []);
+    },
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+/**
+ * Every scheduled/cancelled match, published or still in draft -- the admin Schedule list. Relies
+ * on the "admins can select all matches" RLS policy to see drafts a normal public query can't;
+ * gate `enabled` on isAdmin the same way useAdminRegistrations/useAdminAssessments do.
+ */
+export function useAdminSchedule(enabled: boolean) {
+  return useQuery({
+    queryKey: ['schedule-admin'],
+    queryFn: async (): Promise<MatchRow[]> => {
+      const { data, error } = await supabase
+        .from('matches')
+        .select(MATCH_SELECT)
+        .in('status', ['scheduled', 'cancelled'])
+        .order('scheduled_at', { ascending: true });
+      if (error) throw error;
+      return sortGames((data as MatchRow[]) || []);
+    },
+    enabled,
+    staleTime: 10_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+function invalidateScheduleQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ['schedule-admin'] });
+  queryClient.invalidateQueries({ queryKey: ['schedule-upcoming'] });
+}
+
+export interface ScheduledMatchPayload {
+  eventCode: EventCode;
+  stage: 'roundrobin' | 'knockout';
+  format: 'single' | 'bo3';
+  collegeA: CollegeName;
+  collegeB: CollegeName;
+  sideAName: string;
+  sideBName: string;
+  sideAPlayerIds?: string[];
+  sideBPlayerIds?: string[];
+  firstServer: 'A' | 'B';
+  scheduledAt: string; // ISO timestamp
+  court?: string | null;
+}
+
+/** Creates a new scheduled match in draft (is_published defaults to false) -- an admin publishes it separately. */
+export function useCreateScheduledMatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: ScheduledMatchPayload): Promise<string> => {
+      const { data, error } = await supabase
+        .from('matches')
+        .insert({
+          event_code: p.eventCode,
+          stage: p.stage,
+          format: p.format,
+          college_a: p.collegeA,
+          college_b: p.collegeB,
+          side_a_player_ids: p.sideAPlayerIds ?? [],
+          side_b_player_ids: p.sideBPlayerIds ?? [],
+          side_a_name: p.sideAName,
+          side_b_name: p.sideBName,
+          first_server: p.firstServer,
+          status: 'scheduled',
+          scheduled_at: p.scheduledAt,
+          court: p.court || null,
+        })
+        .select('id')
+        .single();
+      if (error) throw error;
+      if (!data) throw new Error('Scheduled match insert returned no row');
+      return data.id as string;
+    },
+    onSuccess: () => invalidateScheduleQueries(queryClient),
+  });
+}
+
+/** Edits a scheduled match's details. Restricted to status = 'scheduled' -- once a match starts or is cancelled, editing its matchup here no longer makes sense (Cancel/Delete cover those cases instead). */
+export function useUpdateScheduledMatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...p }: ScheduledMatchPayload & { id: string }) => {
+      const { error } = await supabase
+        .from('matches')
+        .update({
+          event_code: p.eventCode,
+          stage: p.stage,
+          format: p.format,
+          college_a: p.collegeA,
+          college_b: p.collegeB,
+          side_a_player_ids: p.sideAPlayerIds ?? [],
+          side_b_player_ids: p.sideBPlayerIds ?? [],
+          side_a_name: p.sideAName,
+          side_b_name: p.sideBName,
+          first_server: p.firstServer,
+          scheduled_at: p.scheduledAt,
+          court: p.court || null,
+        })
+        .eq('id', id)
+        .eq('status', 'scheduled');
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateScheduleQueries(queryClient),
+  });
+}
+
+function useSetSchedulePublished(published: boolean) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('matches').update({ is_published: published }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateScheduleQueries(queryClient),
+  });
+}
+
+export function usePublishMatch() {
+  return useSetSchedulePublished(true);
+}
+
+export function useUnpublishMatch() {
+  return useSetSchedulePublished(false);
+}
+
+/**
+ * Soft cancel: the row stays (never deleted), status flips to 'cancelled'. If it was already
+ * published, `is_published` is left untouched -- the public keeps seeing the match, now marked
+ * "Canceled", rather than it silently disappearing (the "Soft cancel" design decision).
+ */
+export function useCancelScheduledMatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('matches').update({ status: 'cancelled' }).eq('id', id).eq('status', 'scheduled');
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateScheduleQueries(queryClient),
+  });
+}
+
+/** Hard delete -- only ever offered on scheduled/cancelled rows, never a match that has actually been played. */
+export function useDeleteScheduledMatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('matches').delete().eq('id', id).in('status', ['scheduled', 'cancelled']);
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateScheduleQueries(queryClient),
+  });
 }
 
 export interface AnalyticsData {
@@ -705,7 +869,6 @@ export interface CreateMatchPayload {
 }
 
 export function useCreateMatch() {
-  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (p: CreateMatchPayload): Promise<string> => {
       const { data, error } = await supabase.rpc('create_match', {
@@ -728,9 +891,6 @@ export function useCreateMatch() {
       if (error) throw error;
       return data as string;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['schedule-matches'] });
-    },
   });
 }
 
@@ -738,7 +898,6 @@ function invalidateMatchQueries(queryClient: ReturnType<typeof useQueryClient>, 
   queryClient.invalidateQueries({ queryKey: ['match-kpis', matchId] });
   queryClient.invalidateQueries({ queryKey: ['live-matches'] });
   queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-  queryClient.invalidateQueries({ queryKey: ['schedule-matches'] });
 }
 
 export function useRecordPoint() {
@@ -793,7 +952,6 @@ export function useGenerateSyntheticData() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-      queryClient.invalidateQueries({ queryKey: ['schedule-matches'] });
       queryClient.invalidateQueries({ queryKey: ['players'] });
     },
   });
@@ -809,7 +967,6 @@ export function useDeleteSyntheticData() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-      queryClient.invalidateQueries({ queryKey: ['schedule-matches'] });
       queryClient.invalidateQueries({ queryKey: ['players'] });
     },
   });

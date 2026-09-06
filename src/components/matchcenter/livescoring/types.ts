@@ -42,6 +42,14 @@ export interface MatchState {
    * reload mid-match resumes syncing to the same row instead of creating a duplicate.
    */
   matchId: string | null;
+  /**
+   * True when `matchId` is an existing row picked from Schedule (see StartSetup.scheduledMatchId)
+   * rather than one `startLiveMatch` created fresh for this session. Matters only if the match is
+   * ended with zero points scored: an ad hoc row gets discarded outright (nothing worth keeping),
+   * but a scheduled row is admin's Schedule data -- possibly already published -- so it's reverted
+   * back to `scheduled` instead of deleted. See useLiveScoring's endMatch.
+   */
+  startedFromSchedule: boolean;
 }
 
 export interface StartSetup {
@@ -55,4 +63,10 @@ export interface StartSetup {
   playersA: string[];
   playersB: string[];
   firstServer: Side;
+  /**
+   * Set when this match was picked from the Schedule tab instead of set up ad hoc. Tells
+   * useLiveScoring to transition the existing scheduled `matches` row (startScheduledMatch) rather
+   * than create a new one (startLiveMatch) -- see AdminScheduleSection / PickFromSchedule.
+   */
+  scheduledMatchId?: string;
 }

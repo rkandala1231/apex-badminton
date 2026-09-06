@@ -3,8 +3,10 @@ import { useAuth } from '../../../lib/useAuth';
 import {
   discardLiveMatch,
   finishLiveMatch,
+  revertScheduledMatch,
   saveMatchResult,
   startLiveMatch,
+  startScheduledMatch,
   syncLiveGame,
 } from '../../../lib/matchStats';
 import { HARD_CAP, INTERVAL_AT, POINTS_TO_WIN, STORAGE_KEY, WIN_BY } from './constants';
@@ -28,6 +30,7 @@ function freshState(): MatchState {
     matchWinner: null,
     log: [],
     matchId: null,
+    startedFromSchedule: false,
   };
 }
 
@@ -36,9 +39,15 @@ function loadState(): MatchState | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<MatchState>;
-      // Normalize state saved before `matchId` existed (older STORAGE_KEY payloads) --
-      // treat it as "no live row yet", which falls back to the one-shot save at match end.
-      return { ...freshState(), ...parsed, matchId: parsed.matchId ?? null };
+      // Normalize state saved before `matchId`/`startedFromSchedule` existed (older STORAGE_KEY
+      // payloads) -- treat it as "no live row yet" / "not from schedule", which falls back to the
+      // one-shot save at match end and the discard (not revert) path respectively.
+      return {
+        ...freshState(),
+        ...parsed,
+        matchId: parsed.matchId ?? null,
+        startedFromSchedule: parsed.startedFromSchedule ?? false,
+      };
     }
   } catch {
     // localStorage unavailable — start fresh.
@@ -73,6 +82,12 @@ export function useLiveScoring() {
   // scorer has already left (started a new one, or backed out) can't attach its id to the
   // wrong match.
   const generationRef = useRef(0);
+  // True once `finishLiveMatch`'s point-log write has actually landed for the *current* completed
+  // match -- Live Scoring defers writing `match_points` until the very end (unlike the Match KPIs
+  // admin flow, which writes each point immediately via record_match_point), so `get_match_kpis`
+  // would compute every KPI from an EMPTY point log if the "View Match KPIs" link appeared before
+  // this resolves. Gates that link in LiveBoard; reset false on every new match.
+  const [pointsSynced, setPointsSynced] = useState(false);
 
   useEffect(() => {
     saveState(state);
@@ -107,11 +122,13 @@ export function useLiveScoring() {
 
   function finishMatch(finalState: MatchState, winnerSide: Side | null, status: 'completed' | 'abandoned') {
     if (finalState.matchId) {
-      finishLiveMatch({ matchId: finalState.matchId, winnerSide, status, log: finalState.log }).catch((err) => {
-        // eslint-disable-next-line no-console
-        console.error('Failed to finish live match', err);
-        showToast(status === 'completed' ? "Saved locally — couldn't sync final result to server" : "Couldn't sync abandoned match to server");
-      });
+      finishLiveMatch({ matchId: finalState.matchId, winnerSide, status, log: finalState.log })
+        .then(() => setPointsSynced(true))
+        .catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error('Failed to finish live match', err);
+          showToast(status === 'completed' ? "Saved locally — couldn't sync final result to server" : "Couldn't sync abandoned match to server");
+        });
     } else {
       // No live row ever got created (e.g. the device was offline right when the match started)
       // -- fall back to saving the whole match in one shot, same as before Live Scores existed.
@@ -125,6 +142,7 @@ export function useLiveScoring() {
 
   function startMatch(setup: StartSetup) {
     const myGeneration = ++generationRef.current;
+    setPointsSynced(false);
     const nextState: MatchState = {
       ...state,
       stage: setup.stage,
@@ -142,12 +160,27 @@ export function useLiveScoring() {
       server: setup.firstServer,
       matchWinner: null,
       log: [],
-      matchId: null,
+      // Picked from Schedule: the row already exists, so its id is known up front -- no need to
+      // wait on a round trip the way the ad hoc path below does.
+      matchId: setup.scheduledMatchId ?? null,
+      startedFromSchedule: !!setup.scheduledMatchId,
     };
     setState(nextState);
 
-    // Create the live row immediately -- this is what makes the match appear on the public Live
-    // Scores tab before a single point has been played.
+    if (setup.scheduledMatchId) {
+      // Transition the existing scheduled row to in_progress instead of creating a new one --
+      // this is what keeps the match's identity (and public visibility, if already published)
+      // continuous from Schedule through Live Scores to Completed Matches.
+      startScheduledMatch(setup.scheduledMatchId, setup.firstServer).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('Failed to start scheduled match on server', err);
+        showToast("Scoring locally — couldn't start live sync");
+      });
+      return;
+    }
+
+    // Ad hoc path: create the live row immediately -- this is what makes the match appear on the
+    // public Live Scores tab before a single point has been played.
     startLiveMatch({
       stage: setup.stage,
       format: setup.format,
@@ -237,6 +270,7 @@ export function useLiveScoring() {
   function newMatch() {
     const kept = { stage: state.stage, format: state.format, eventType: state.eventType };
     setState({ ...freshState(), ...kept });
+    setPointsSynced(false);
   }
 
   function endMatch() {
@@ -246,12 +280,21 @@ export function useLiveScoring() {
       // (started, then immediately ended) has nothing to say about anyone's performance.
       finishMatch(state, null, 'abandoned');
     } else if (state.started && state.matchId && state.log.length === 0) {
-      // A live row was already created (match started) but nothing was ever scored -- remove
-      // it rather than stranding an empty `in_progress` row on Live Scores forever.
-      discardLiveMatch(state.matchId).catch((err) => {
-        // eslint-disable-next-line no-console
-        console.error('Failed to discard empty live match', err);
-      });
+      if (state.startedFromSchedule) {
+        // This row is admin's Schedule data (possibly already published), not one created just
+        // for this live session -- put it back to `scheduled` rather than deleting it.
+        revertScheduledMatch(state.matchId).catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error('Failed to revert scheduled match', err);
+        });
+      } else {
+        // A live row was already created (match started) but nothing was ever scored -- remove
+        // it rather than stranding an empty `in_progress` row on Live Scores forever.
+        discardLiveMatch(state.matchId).catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error('Failed to discard empty live match', err);
+        });
+      }
     }
     newMatch();
   }
@@ -261,6 +304,7 @@ export function useLiveScoring() {
     toast,
     gamesNeeded,
     currentGame,
+    pointsSynced,
     gamesWonCount: (side: Side) => gamesWonCount(state.games, side),
     startMatch,
     scorePoint,

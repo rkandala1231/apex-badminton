@@ -4,8 +4,19 @@ import { SetupScreen } from './livescoring/SetupScreen';
 import { useLiveScoring } from './livescoring/useLiveScoring';
 
 export function LiveScoringSection() {
-  const { state, toast, gamesNeeded, gamesWonCount, startMatch, scorePoint, undo, nextGame, newMatch, endMatch } =
-    useLiveScoring();
+  const {
+    state,
+    toast,
+    gamesNeeded,
+    gamesWonCount,
+    pointsSynced,
+    startMatch,
+    scorePoint,
+    undo,
+    nextGame,
+    newMatch,
+    endMatch,
+  } = useLiveScoring();
 
   // Keyboard shortcuts while a match is live: A / B to score, Z to undo.
   useEffect(() => {
@@ -37,6 +48,7 @@ export function LiveScoringSection() {
           toast={toast}
           gamesNeeded={gamesNeeded}
           gamesWonCount={gamesWonCount}
+          pointsSynced={pointsSynced}
           onScore={scorePoint}
           onUndo={undo}
           onEnd={endMatch}

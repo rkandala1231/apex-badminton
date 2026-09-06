@@ -2,8 +2,11 @@ import { useState } from 'react';
 import type { CollegeName } from '../../../lib/matchCenterData';
 import { EVENT_LABEL, HARD_CAP, INTERVAL_AT, POINTS_TO_WIN, WIN_BY } from './constants';
 import { computeDisplayName } from './pairing';
+import { PickFromSchedule } from './PickFromSchedule';
 import { SidePicker } from './SidePicker';
 import type { Format, LiveEventType, Side, Stage, StartSetup } from './types';
+
+type SetupMode = 'schedule' | 'adhoc';
 
 const EVENT_OPTIONS: LiveEventType[] = ['MS', 'WS', 'MD', 'WD', 'XD', 'TEAM'];
 
@@ -44,6 +47,51 @@ function SegButton({
 }
 
 export function SetupScreen({ onStart }: { onStart: (setup: StartSetup) => void }) {
+  const [mode, setMode] = useState<SetupMode>('schedule');
+
+  return (
+    <div className="max-w-[560px]">
+      <div className="flex gap-2 mb-5" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'schedule'}
+          onClick={() => setMode('schedule')}
+          className={`px-3.5 py-2 rounded-full text-[0.8rem] font-semibold border transition-colors ${
+            mode === 'schedule' ? 'bg-accent-soft border-accent text-accent' : 'border-border text-text-secondary hover:text-text-primary'
+          }`}
+        >
+          From Schedule
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'adhoc'}
+          onClick={() => setMode('adhoc')}
+          className={`px-3.5 py-2 rounded-full text-[0.8rem] font-semibold border transition-colors ${
+            mode === 'adhoc' ? 'bg-accent-soft border-accent text-accent' : 'border-border text-text-secondary hover:text-text-primary'
+          }`}
+        >
+          Ad Hoc
+        </button>
+      </div>
+
+      {mode === 'schedule' ? (
+        <>
+          <p className="text-[0.95rem] mb-5 max-w-[60ch]">
+            Pick a match already on the Schedule tab. Its matchup and format carry over automatically
+            — just confirm who serves first and start.
+          </p>
+          <PickFromSchedule onStart={onStart} />
+        </>
+      ) : (
+        <AdHocForm onStart={onStart} />
+      )}
+    </div>
+  );
+}
+
+function AdHocForm({ onStart }: { onStart: (setup: StartSetup) => void }) {
   const [stage, setStage] = useState<Stage>('roundrobin');
   const [format, setFormat] = useState<Format>('single');
   const [eventType, setEventType] = useState<LiveEventType>('MS');

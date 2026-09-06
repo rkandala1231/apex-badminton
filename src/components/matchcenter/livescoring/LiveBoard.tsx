@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import type { MatchState, Side } from './types';
 
 export function LiveBoard({
@@ -6,6 +7,7 @@ export function LiveBoard({
   toast,
   gamesNeeded,
   gamesWonCount,
+  pointsSynced,
   onScore,
   onUndo,
   onEnd,
@@ -16,6 +18,7 @@ export function LiveBoard({
   toast: string | null;
   gamesNeeded: number;
   gamesWonCount: (side: Side) => number;
+  pointsSynced: boolean;
   onScore: (side: Side) => void;
   onUndo: () => void;
   onEnd: () => void;
@@ -134,10 +137,24 @@ export function LiveBoard({
               </div>
             ))}
           </div>
+          {state.matchId && (
+            pointsSynced ? (
+              <Link
+                to={`/match-center/match/${state.matchId}`}
+                className="block w-full bg-accent text-[#08211a] rounded-xl py-3.5 font-extrabold text-[0.98rem] uppercase tracking-wide hover:bg-accent-hover transition-colors no-underline"
+              >
+                View Match KPIs →
+              </Link>
+            ) : (
+              <div className="w-full rounded-xl py-3.5 font-extrabold text-[0.98rem] uppercase tracking-wide text-text-muted border border-border text-center">
+                Saving match…
+              </div>
+            )
+          )}
           <button
             type="button"
             onClick={onNewMatch}
-            className="w-full bg-accent text-[#08211a] rounded-xl py-3.5 font-extrabold text-[0.98rem] uppercase tracking-wide hover:bg-accent-hover transition-colors mt-2.5"
+            className="w-full bg-transparent border border-border rounded-xl py-3.5 font-extrabold text-[0.98rem] uppercase tracking-wide text-text-secondary hover:border-text-muted hover:text-text-primary transition-colors mt-2.5"
           >
             New Match
           </button>
