@@ -208,6 +208,48 @@ export async function syncLiveGame(matchId: string, game: LiveGameSnapshot): Pro
   if (error) throw error;
 }
 
+export interface LivePointSync {
+  gameIndex: number;
+  pointIndex: number;
+  side: Side;
+  serverSide: Side;
+}
+
+/**
+ * Syncs one scored point to `match_points` immediately, as it happens -- not batched into one
+ * insert at the end the way this used to work. Fire-and-forget, same offline-safety contract as
+ * `syncLiveGame`: never blocks local scoring, and a dropped call over a flaky court-side
+ * connection just leaves a gap that `finishLiveMatch`'s reconciling upsert (below) fills in when
+ * the match ends. This is what makes `match_points` -- and therefore every KPI that reads it, and
+ * a resumed match's reconstructed point log -- accurate throughout play, not just retroactively
+ * once a match is done.
+ */
+export async function syncLivePoint(matchId: string, point: LivePointSync): Promise<void> {
+  const { error } = await supabase.from('match_points').insert({
+    match_id: matchId,
+    game_index: point.gameIndex,
+    point_index: point.pointIndex,
+    scoring_side: point.side,
+    server_side: point.serverSide,
+  });
+  if (error) throw error;
+}
+
+/**
+ * Undoes `syncLivePoint` for the specific point just undone locally -- deletes by the exact same
+ * (match_id, game_index, point_index) key it was inserted with, so this can only ever remove the
+ * one point being undone, never a different one.
+ */
+export async function deleteLivePoint(matchId: string, gameIndex: number, pointIndex: number): Promise<void> {
+  const { error } = await supabase
+    .from('match_points')
+    .delete()
+    .eq('match_id', matchId)
+    .eq('game_index', gameIndex)
+    .eq('point_index', pointIndex);
+  if (error) throw error;
+}
+
 export interface FinishLiveMatchArgs {
   matchId: string;
   winnerSide: Side | null;
@@ -219,9 +261,20 @@ export interface FinishLiveMatchArgs {
  * Flips a live match's `matches` row from `in_progress` to its final status -- this is the one
  * write that moves it off the public Live Scores tab (status = 'in_progress') and onto Completed
  * Matches (status = 'completed'); an abandoned match leaves Live Scores too but, correctly,
- * never appears as a completed result anywhere. Game scores are already current from
- * `syncLiveGame` calls during play, so this only updates the match row and writes the full
- * point-by-point log (not previously persisted, to keep court-side writes light).
+ * never appears as a completed result anywhere. Game scores and, now, individual points are
+ * already synced live via `syncLiveGame`/`syncLivePoint` as the match was played, so this mainly
+ * just updates the match row.
+ *
+ * The one thing it still does with `log`: upserts the full point-by-point log with
+ * `ignoreDuplicates` as a reconciliation pass. Per-point sync is fire-and-forget, so an individual
+ * point's insert can occasionally be dropped over a flaky connection without the caller ever
+ * knowing -- unlike `syncLiveGame`'s upsert, which resends the *whole* current score each time and
+ * so self-heals a dropped update on the very next point, a missing `match_points` row stays
+ * missing forever unless something backfills it. This upsert is that backfill: rows already
+ * synced are skipped (via the unique `(match_id, game_index, point_index)` constraint), and any
+ * gap left by a dropped `syncLivePoint` call gets filled in, so `match_points` -- and everything
+ * computed from it (Point-Win %, streak, clutch) -- is guaranteed complete by the time a match is
+ * marked finished.
  */
 export async function finishLiveMatch({ matchId, winnerSide, status, log }: FinishLiveMatchArgs): Promise<void> {
   const { error: matchError } = await supabase
@@ -232,7 +285,9 @@ export async function finishLiveMatch({ matchId, winnerSide, status, log }: Fini
 
   const pointRows = toPointsRows(matchId, log);
   if (pointRows.length > 0) {
-    const { error: pointsError } = await supabase.from('match_points').insert(pointRows);
+    const { error: pointsError } = await supabase
+      .from('match_points')
+      .upsert(pointRows, { onConflict: 'match_id,game_index,point_index', ignoreDuplicates: true });
     if (pointsError) throw pointsError;
   }
 }
@@ -297,28 +352,22 @@ export interface ResumableMatch {
   games: GameState[];
   server: Side;
   matchWinner: Side | null;
+  log: LogEntry[];
 }
 
 /**
- * Reconstructs enough of a still-in-progress match's state to keep scoring it from any
- * device/browser -- not just the one that started it (see AdminLiveMatchesSection's "Resume
- * Scoring" links). Built from `match_games`, the running per-game score Live Scoring already
- * syncs live via `syncLiveGame` -- NOT `match_points`, which Live Scoring only ever writes once,
- * in one batch, when the match ends (see `finishLiveMatch`). Mid-match there is no point log to
- * replay, which leaves two real, worth-knowing-about limitations:
+ * Reconstructs a still-in-progress match's state to keep scoring it from any device/browser --
+ * not just the one that started it (see AdminLiveMatchesSection's "Resume Scoring" links). Built
+ * from `match_games` (the running per-game score) AND `match_points` (the point-by-point log),
+ * both of which Live Scoring now syncs live -- per game via `syncLiveGame`, per point via
+ * `syncLivePoint` -- as the match is played, not just once in a batch at the end.
  *
- *   1. `log` always comes back empty, so Undo after resuming can only undo points scored since
- *      the resume -- there's no earlier log entry to undo back to.
- *   2. `server` is a best guess: the winner of the last finished game, or `first_server` if no
- *      game has finished yet. Rally-point scoring means whoever serves next depends on who won
- *      the specific last rally, which a running score alone can't tell you. It's cosmetic only
- *      (it doesn't gate which side's button is tappable) and self-corrects at the next game
- *      boundary, where the real winner is known again.
- *
- * A deeper fix -- syncing match_points per point instead of in one batch at the end -- would
- * remove both limitations (and would also make a resumed-then-completed match's KPIs fully
- * accurate, not just its live score) but changes Live Scoring's network behavior on every single
- * point. Flagged as a follow-up, not done as a side effect of this fix.
+ * This used to reconstruct `games` only, leaving `log` always empty and `server` a best guess
+ * (the winner of the last finished game). Now that every point is synced as it happens, the real
+ * log is available to replay, which removes both of that approach's limitations: Undo after
+ * resuming can undo all the way back through the match, not just points scored since the resume;
+ * and `server` is exact -- whoever won the last synced rally serves next -- rather than a guess
+ * that was only right between games.
  */
 export async function fetchResumableMatch(matchId: string): Promise<ResumableMatch> {
   const { data: match, error: matchError } = await supabase
@@ -349,8 +398,26 @@ export async function fetchResumableMatch(matchId: string): Promise<ResumableMat
     games.push({ a: 0, b: 0, winner: null, intervalShown: false });
   }
 
-  const lastFinishedWinner = [...games].reverse().find((g) => g.winner)?.winner ?? null;
-  const server: Side = lastFinishedWinner ?? (match.first_server as Side);
+  const { data: pointRows, error: pointsError } = await supabase
+    .from('match_points')
+    .select('game_index, point_index, scoring_side, server_side')
+    .eq('match_id', matchId)
+    .order('game_index', { ascending: true })
+    .order('point_index', { ascending: true });
+  if (pointsError) throw pointsError;
+
+  const log: LogEntry[] = (pointRows ?? []).map((p) => ({
+    gameIndex: p.game_index as number,
+    side: p.scoring_side as Side,
+    prevServer: p.server_side as Side,
+  }));
+
+  // Whoever scored the most recently synced point serves next -- the same rule scorePoint()
+  // applies locally (`server: side`), and the same value nextGame() carries over between games
+  // (the last game's final point is, by definition, that game's winner). Falls back to
+  // `first_server` only when literally nothing has been synced yet.
+  const lastEntry = log[log.length - 1];
+  const server: Side = lastEntry ? lastEntry.side : (match.first_server as Side);
 
   const gamesNeeded = (match.format as Format) === 'bo3' ? 2 : 1;
   const winsFor = (side: Side) => games.filter((g) => g.winner === side).length;
@@ -369,5 +436,6 @@ export async function fetchResumableMatch(matchId: string): Promise<ResumableMat
     games,
     server,
     matchWinner,
+    log,
   };
 }

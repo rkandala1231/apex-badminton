@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../../lib/useAuth';
 import {
+  deleteLivePoint,
   discardLiveMatch,
   fetchResumableMatch,
   finishLiveMatch,
@@ -9,6 +10,7 @@ import {
   startLiveMatch,
   startScheduledMatch,
   syncLiveGame,
+  syncLivePoint,
 } from '../../../lib/matchStats';
 import { HARD_CAP, INTERVAL_AT, POINTS_TO_WIN, STORAGE_KEY, WIN_BY } from './constants';
 import type { GameState, MatchState, Side, StartSetup } from './types';
@@ -121,6 +123,27 @@ export function useLiveScoring() {
     });
   }
 
+  // Same fire-and-forget contract as syncGame -- syncs one point to `match_points` the moment
+  // it's scored, instead of batching the whole log into one write at match end. A dropped call
+  // just leaves a gap that finishLiveMatch's reconciling upsert fills in once the match completes.
+  function syncPoint(matchId: string | null, gameIndex: number, pointIndex: number, side: Side, serverSide: Side) {
+    if (!matchId) return;
+    syncLivePoint(matchId, { gameIndex, pointIndex, side, serverSide }).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to sync live point', err);
+    });
+  }
+
+  // Mirrors syncPoint for Undo -- removes the exact point being undone by its (game_index,
+  // point_index) key so a dropped/late sync can never delete the wrong row.
+  function unsyncPoint(matchId: string | null, gameIndex: number, pointIndex: number) {
+    if (!matchId) return;
+    deleteLivePoint(matchId, gameIndex, pointIndex).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to remove live point', err);
+    });
+  }
+
   function finishMatch(finalState: MatchState, winnerSide: Side | null, status: 'completed' | 'abandoned') {
     if (finalState.matchId) {
       finishLiveMatch({ matchId: finalState.matchId, winnerSide, status, log: finalState.log })
@@ -211,10 +234,11 @@ export function useLiveScoring() {
 
   /**
    * Picks up scoring an in-progress match from wherever it left off, regardless of which
-   * device/browser started it -- see AdminLiveMatchesSection's "Resume Scoring" links and
-   * fetchResumableMatch's doc comment for the real limitations this has (empty log, best-guess
-   * server). Throws on failure so the caller (LiveScoringSection) can toast a real error instead
-   * of silently doing nothing.
+   * device/browser started it -- see AdminLiveMatchesSection's "Resume Scoring" links.
+   * fetchResumableMatch now reconstructs the real point-by-point log (from `match_points`, synced
+   * live as the match was played), so this restores full Undo history and the exact server, not
+   * just the running score. Throws on failure so the caller (LiveScoringSection) can toast a real
+   * error instead of silently doing nothing.
    */
   async function resumeMatch(matchId: string) {
     const resumable = await fetchResumableMatch(matchId);
@@ -236,7 +260,7 @@ export function useLiveScoring() {
       games: resumable.games,
       server: resumable.server,
       matchWinner: resumable.matchWinner,
-      log: [],
+      log: resumable.log,
       matchId: resumable.matchId,
       startedFromSchedule: false,
     };
@@ -258,7 +282,12 @@ export function useLiveScoring() {
     const g = games[games.length - 1];
     if (!g || g.winner) return;
 
-    const log = [...state.log, { gameIndex: games.length - 1, side, prevServer: state.server }];
+    const gameIndex = games.length - 1;
+    // 1-based within-game point index, matching toPointsRows' convention exactly -- the count of
+    // this game's points already in the log, plus the one being added now.
+    const pointIndex = state.log.filter((e) => e.gameIndex === gameIndex).length + 1;
+    const prevServer = state.server;
+    const log = [...state.log, { gameIndex, side, prevServer }];
     if (side === 'A') g.a += 1;
     else g.b += 1;
 
@@ -281,7 +310,8 @@ export function useLiveScoring() {
     setState(nextState);
     if (intervalMsg) showToast(intervalMsg);
 
-    syncGame(nextState.matchId, games.length - 1, g);
+    syncGame(nextState.matchId, gameIndex, g);
+    syncPoint(nextState.matchId, gameIndex, pointIndex, side, prevServer);
     if (matchWinner) finishMatch(nextState, matchWinner, 'completed');
   }
 
@@ -289,6 +319,9 @@ export function useLiveScoring() {
     if (state.log.length === 0) return;
     const log = [...state.log];
     const entry = log.pop()!;
+    // The point index it was synced under -- same 1-based-within-game convention as scorePoint,
+    // computed from what's left in the log after popping this entry off.
+    const removedPointIndex = log.filter((e) => e.gameIndex === entry.gameIndex).length + 1;
     const games = state.games.map((g) => ({ ...g }));
     const g = games[entry.gameIndex];
     if (entry.side === 'A') g.a = Math.max(0, g.a - 1);
@@ -297,6 +330,7 @@ export function useLiveScoring() {
     const nextState = { ...state, games, server: entry.prevServer, matchWinner: null, log };
     setState(nextState);
     syncGame(nextState.matchId, entry.gameIndex, g);
+    unsyncPoint(nextState.matchId, entry.gameIndex, removedPointIndex);
   }
 
   function nextGame() {
@@ -319,11 +353,10 @@ export function useLiveScoring() {
 
   function endMatch() {
     if (!window.confirm('End this match now? Current progress will be cleared.')) return;
-    // Whether real scoring happened can't be read off `log.length` alone: a match resumed via
-    // resumeMatch() always starts with an empty log (see fetchResumableMatch) even though its
-    // games may already carry a real score. Check the actual scores too, or ending a resumed
-    // match early would wrongly fall into the "nothing was scored" branch below and discard or
-    // revert a match that's actually mid-play.
+    // Belt-and-suspenders: resumeMatch() now restores the real log via fetchResumableMatch, so
+    // `log.length` alone is normally accurate even for a resumed match. Still also checking the
+    // actual game scores costs nothing and guards against any future path that legitimately ends
+    // up with a nonempty score but an empty local log.
     const hasProgress = state.log.length > 0 || state.games.some((g) => g.a > 0 || g.b > 0);
     if (state.started && hasProgress && !state.matchWinner) {
       // Only worth recording if at least one point was actually scored -- an empty stub match
