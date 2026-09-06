@@ -1,0 +1,23 @@
+-- Fixes a regression introduced by 20260905190000_match_kpi_schema_and_rpcs.sql: that migration
+-- added `matches.max_points` with NO default, and a new check constraint
+-- (`matches_max_points_check`: win_by_two = false or (max_points is not null and max_points >
+-- target_points)) that every row must satisfy. `win_by_two` defaults to `true`, so any insert that
+-- omits both columns now violates the constraint.
+--
+-- The existing, unmodified Live Scoring code (matchStats.ts's `startLiveMatch()` and
+-- `saveMatchResult()`) does exactly that -- it has never known about these new columns and inserts
+-- into `matches` without them, relying entirely on column defaults (which is exactly why
+-- 20260905190000 gave target_points/win_by_two sane defaults in the first place, matching the
+-- real historical Live Scoring rule of 15/win-by-two/cap-16 from
+-- src/components/matchcenter/livescoring/constants.ts). `max_points` was the one column in that
+-- set left without a default, so every new match started through the existing Live Scoring
+-- feature now fails outright with "violates check constraint matches_max_points_check".
+--
+-- Confirmed by reproducing it directly: rebuilt the real migration chain in a fresh local
+-- Postgres database and ran matchStats.ts's exact insert (same column list, values) against it --
+-- it fails before this fix and succeeds after, with target_points=15, win_by_two=true,
+-- max_points=16, matching the real hardcoded rule. Also confirmed create_match()'s own explicit
+-- NULL max_points path (the APEX-15 preset) is unaffected -- Postgres only applies a column
+-- default when the column is omitted from an insert's column list, and create_match always lists
+-- max_points explicitly, even when passing NULL.
+alter table public.matches alter column max_points set default 16;
