@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../../lib/useAuth';
 import {
   discardLiveMatch,
+  fetchResumableMatch,
   finishLiveMatch,
   revertScheduledMatch,
   saveMatchResult,
@@ -208,6 +209,49 @@ export function useLiveScoring() {
       });
   }
 
+  /**
+   * Picks up scoring an in-progress match from wherever it left off, regardless of which
+   * device/browser started it -- see AdminLiveMatchesSection's "Resume Scoring" links and
+   * fetchResumableMatch's doc comment for the real limitations this has (empty log, best-guess
+   * server). Throws on failure so the caller (LiveScoringSection) can toast a real error instead
+   * of silently doing nothing.
+   */
+  async function resumeMatch(matchId: string) {
+    const resumable = await fetchResumableMatch(matchId);
+    generationRef.current++; // invalidate any in-flight ad hoc startLiveMatch this device had pending
+    setPointsSynced(false);
+    const nextState: MatchState = {
+      ...state,
+      stage: resumable.stage,
+      format: resumable.format,
+      eventType: resumable.eventType,
+      nameA: resumable.nameA,
+      nameB: resumable.nameB,
+      collegeA: resumable.collegeA,
+      collegeB: resumable.collegeB,
+      playersA: [],
+      playersB: [],
+      firstServer: resumable.firstServer,
+      started: true,
+      games: resumable.games,
+      server: resumable.server,
+      matchWinner: resumable.matchWinner,
+      log: [],
+      matchId: resumable.matchId,
+      startedFromSchedule: false,
+    };
+    setState(nextState);
+
+    // Edge case: the match was already effectively won (enough games synced to match_games) but
+    // the status flip to 'completed' never made it to the server -- e.g. the original device lost
+    // its connection or the tab closed right after the winning point. Finish it properly now
+    // rather than leaving the match stuck showing a "Match Winner" overlay that never actually
+    // completes the row server-side.
+    if (resumable.matchWinner) {
+      finishMatch(nextState, resumable.matchWinner, 'completed');
+    }
+  }
+
   function scorePoint(side: Side) {
     if (state.matchWinner) return;
     const games = state.games.map((g) => ({ ...g }));
@@ -275,11 +319,17 @@ export function useLiveScoring() {
 
   function endMatch() {
     if (!window.confirm('End this match now? Current progress will be cleared.')) return;
-    if (state.started && state.log.length > 0 && !state.matchWinner) {
+    // Whether real scoring happened can't be read off `log.length` alone: a match resumed via
+    // resumeMatch() always starts with an empty log (see fetchResumableMatch) even though its
+    // games may already carry a real score. Check the actual scores too, or ending a resumed
+    // match early would wrongly fall into the "nothing was scored" branch below and discard or
+    // revert a match that's actually mid-play.
+    const hasProgress = state.log.length > 0 || state.games.some((g) => g.a > 0 || g.b > 0);
+    if (state.started && hasProgress && !state.matchWinner) {
       // Only worth recording if at least one point was actually scored -- an empty stub match
       // (started, then immediately ended) has nothing to say about anyone's performance.
       finishMatch(state, null, 'abandoned');
-    } else if (state.started && state.matchId && state.log.length === 0) {
+    } else if (state.started && state.matchId && !hasProgress) {
       if (state.startedFromSchedule) {
         // This row is admin's Schedule data (possibly already published), not one created just
         // for this live session -- put it back to `scheduled` rather than deleting it.
@@ -307,6 +357,7 @@ export function useLiveScoring() {
     pointsSynced,
     gamesWonCount: (side: Side) => gamesWonCount(state.games, side),
     startMatch,
+    resumeMatch,
     scorePoint,
     undo,
     nextGame,

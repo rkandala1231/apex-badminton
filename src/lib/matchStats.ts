@@ -1,7 +1,9 @@
 import { supabase } from './supabase';
 import type { CollegeName } from './matchCenterData';
+import { INTERVAL_AT } from '../components/matchcenter/livescoring/constants';
 import type {
   Format,
+  GameState,
   LiveEventType,
   LogEntry,
   MatchState,
@@ -280,4 +282,92 @@ export async function revertScheduledMatch(matchId: string): Promise<void> {
     .eq('id', matchId)
     .eq('status', 'in_progress');
   if (error) throw error;
+}
+
+export interface ResumableMatch {
+  matchId: string;
+  stage: Stage;
+  format: Format;
+  eventType: LiveEventType;
+  nameA: string;
+  nameB: string;
+  collegeA: CollegeName | null;
+  collegeB: CollegeName | null;
+  firstServer: Side;
+  games: GameState[];
+  server: Side;
+  matchWinner: Side | null;
+}
+
+/**
+ * Reconstructs enough of a still-in-progress match's state to keep scoring it from any
+ * device/browser -- not just the one that started it (see AdminLiveMatchesSection's "Resume
+ * Scoring" links). Built from `match_games`, the running per-game score Live Scoring already
+ * syncs live via `syncLiveGame` -- NOT `match_points`, which Live Scoring only ever writes once,
+ * in one batch, when the match ends (see `finishLiveMatch`). Mid-match there is no point log to
+ * replay, which leaves two real, worth-knowing-about limitations:
+ *
+ *   1. `log` always comes back empty, so Undo after resuming can only undo points scored since
+ *      the resume -- there's no earlier log entry to undo back to.
+ *   2. `server` is a best guess: the winner of the last finished game, or `first_server` if no
+ *      game has finished yet. Rally-point scoring means whoever serves next depends on who won
+ *      the specific last rally, which a running score alone can't tell you. It's cosmetic only
+ *      (it doesn't gate which side's button is tappable) and self-corrects at the next game
+ *      boundary, where the real winner is known again.
+ *
+ * A deeper fix -- syncing match_points per point instead of in one batch at the end -- would
+ * remove both limitations (and would also make a resumed-then-completed match's KPIs fully
+ * accurate, not just its live score) but changes Live Scoring's network behavior on every single
+ * point. Flagged as a follow-up, not done as a side effect of this fix.
+ */
+export async function fetchResumableMatch(matchId: string): Promise<ResumableMatch> {
+  const { data: match, error: matchError } = await supabase
+    .from('matches')
+    .select('id, stage, format, event_code, college_a, college_b, side_a_name, side_b_name, first_server, status')
+    .eq('id', matchId)
+    .single();
+  if (matchError) throw matchError;
+  if (!match) throw new Error('Match not found.');
+  if (match.status !== 'in_progress') {
+    throw new Error('This match is no longer in progress — it may have already finished or been ended.');
+  }
+
+  const { data: gameRows, error: gamesError } = await supabase
+    .from('match_games')
+    .select('game_index, a_score, b_score, winner_side')
+    .eq('match_id', matchId)
+    .order('game_index', { ascending: true });
+  if (gamesError) throw gamesError;
+
+  const games: GameState[] = (gameRows ?? []).map((g) => ({
+    a: g.a_score as number,
+    b: g.b_score as number,
+    winner: g.winner_side as Side | null,
+    intervalShown: Math.max(g.a_score as number, g.b_score as number) >= INTERVAL_AT,
+  }));
+  if (games.length === 0) {
+    games.push({ a: 0, b: 0, winner: null, intervalShown: false });
+  }
+
+  const lastFinishedWinner = [...games].reverse().find((g) => g.winner)?.winner ?? null;
+  const server: Side = lastFinishedWinner ?? (match.first_server as Side);
+
+  const gamesNeeded = (match.format as Format) === 'bo3' ? 2 : 1;
+  const winsFor = (side: Side) => games.filter((g) => g.winner === side).length;
+  const matchWinner: Side | null = winsFor('A') >= gamesNeeded ? 'A' : winsFor('B') >= gamesNeeded ? 'B' : null;
+
+  return {
+    matchId: match.id as string,
+    stage: match.stage as Stage,
+    format: match.format as Format,
+    eventType: match.event_code as LiveEventType,
+    nameA: match.side_a_name as string,
+    nameB: match.side_b_name as string,
+    collegeA: (match.college_a as CollegeName) ?? null,
+    collegeB: (match.college_b as CollegeName) ?? null,
+    firstServer: match.first_server as Side,
+    games,
+    server,
+    matchWinner,
+  };
 }

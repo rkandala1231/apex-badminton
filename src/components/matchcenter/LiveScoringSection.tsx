@@ -1,22 +1,74 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { toast as notify } from 'sonner';
 import { LiveBoard } from './livescoring/LiveBoard';
 import { SetupScreen } from './livescoring/SetupScreen';
 import { useLiveScoring } from './livescoring/useLiveScoring';
 
 export function LiveScoringSection() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const resumeId = searchParams.get('resume');
+  // Guards against re-handling the same ?resume=<id> on every re-render (setSearchParams below
+  // strips it, but that update isn't synchronous) and against re-firing after the user has
+  // declined to switch away from a different match already active on this device.
+  const handledResumeId = useRef<string | null>(null);
+
   const {
     state,
-    toast,
+    toast: liveToast,
     gamesNeeded,
     gamesWonCount,
     pointsSynced,
     startMatch,
+    resumeMatch,
     scorePoint,
     undo,
     nextGame,
     newMatch,
     endMatch,
   } = useLiveScoring();
+
+  // Picking up ?resume=<matchId> (from AdminLiveMatchesSection's "Resume Scoring" links) --
+  // clears the query param once handled either way, so navigating here again with no param
+  // doesn't retrigger it.
+  useEffect(() => {
+    if (!resumeId || handledResumeId.current === resumeId) return;
+
+    if (state.started && state.matchId !== resumeId) {
+      const ok = window.confirm(
+        "You're currently scoring a different match on this device. Switch to this one instead? " +
+          'The other match stays in progress in the database and can be resumed later the same way.'
+      );
+      if (!ok) {
+        handledResumeId.current = resumeId;
+        setSearchParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.delete('resume');
+            return next;
+          },
+          { replace: true }
+        );
+        return;
+      }
+    }
+
+    handledResumeId.current = resumeId;
+    resumeMatch(resumeId)
+      .then(() => notify.success('Resumed — pick up scoring where it left off.'))
+      .catch((err) => notify.error(err instanceof Error ? err.message : 'Could not resume that match.'))
+      .finally(() => {
+        setSearchParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.delete('resume');
+            return next;
+          },
+          { replace: true }
+        );
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeId]);
 
   // Keyboard shortcuts while a match is live: A / B to score, Z to undo.
   useEffect(() => {
@@ -45,7 +97,7 @@ export function LiveScoringSection() {
       {state.started ? (
         <LiveBoard
           state={state}
-          toast={toast}
+          toast={liveToast}
           gamesNeeded={gamesNeeded}
           gamesWonCount={gamesWonCount}
           pointsSynced={pointsSynced}
